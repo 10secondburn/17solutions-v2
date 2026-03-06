@@ -34,6 +34,12 @@ Kennzeichne diese Stufen im Text mit den Labels [VERIFIZIERT], [PLAUSIBEL] oder 
 
 ## Output-Format
 Antworte ZUERST mit einer natürlichen, einladenden Analyse der Marke (2-3 Absätze).
+
+Dann schliesse mit einer klar abgesetzten Zusammenfassung:
+
+### Erkenntnisse
+Fasse die 3-5 wichtigsten Erkenntnisse der Markenanalyse in Bulletpoints zusammen. Jeder Punkt sollte eine klare, handlungsrelevante Erkenntnis sein — kein Wiederholen des Textes, sondern zugespitzte Takeaways.
+
 Dann liefere am Ende deiner Antwort einen strukturierten Block im folgenden Format:
 
 \`\`\`json
@@ -88,6 +94,12 @@ Mark these levels in the text with labels [VERIFIED], [PLAUSIBLE] or [HYPOTHESIS
 
 ## Output Format
 First respond with a natural, inviting analysis of the brand (2-3 paragraphs).
+
+Then close with a clearly separated summary:
+
+### Key Insights
+Summarize the 3-5 most important insights from the analysis as bullet points. Each should be a sharp, actionable takeaway — not a repetition of the text.
+
 Then provide a structured block at the end in this format:
 
 \`\`\`json

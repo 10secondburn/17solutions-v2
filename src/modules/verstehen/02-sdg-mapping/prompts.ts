@@ -68,6 +68,11 @@ Antworte ZUERST mit einer strategischen Analyse (3-4 Absaetze):
 - Warne vor SDGs die naheliegend erscheinen aber ein Greenwashing-Risiko bergen
 - Gib eine klare Empfehlung welche SDGs am vielversprechendsten sind
 
+Dann schliesse mit einer klar abgesetzten Zusammenfassung:
+
+### Erkenntnisse
+Fasse die 3-5 wichtigsten Erkenntnisse des SDG-Mappings in Bulletpoints zusammen. Fokus auf: welche SDGs die staerkste strategische Passung haben, wo ueberraschende Chancen liegen, und wo Vorsicht geboten ist.
+
 Dann liefere am Ende den strukturierten Block:
 
 \`\`\`json
@@ -141,6 +146,11 @@ First respond with a strategic analysis (3-4 paragraphs):
 - Also name 1-2 surprising SDG connections not immediately obvious
 - Warn about SDGs that seem obvious but carry greenwashing risk
 - Give a clear recommendation of the most promising SDGs
+
+Then close with a clearly separated summary:
+
+### Key Insights
+Summarize the 3-5 most important insights from the SDG mapping as bullet points. Focus on: which SDGs have the strongest strategic fit, where surprising opportunities lie, and where caution is needed.
 
 Then provide the structured block at the end:
 

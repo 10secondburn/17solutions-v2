@@ -542,34 +542,98 @@ export default function SessionPage() {
             </div>
           )}
 
-          {/* Weiter-Button nach abgeschlossener Analyse */}
-          {!sending && !streaming && messages.length > 0 && hasNextModule() && (
+          {/* Phase-Complete Card: Download + Weiter */}
+          {!sending && !streaming && messages.length > 0 && (
             <div style={{
-              display: 'flex', justifyContent: 'center',
-              padding: '16px 0 8px',
+              margin: '24px auto 8px',
+              maxWidth: 560,
+              padding: '20px 24px',
+              borderRadius: 16,
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
             }}>
-              <button
-                onClick={handleAdvance}
-                style={{
-                  padding: '12px 32px', borderRadius: 12,
-                  background: 'var(--accent-teal)',
-                  color: 'white', fontSize: 14, fontWeight: 600,
-                  border: 'none', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  transition: 'transform 0.15s, box-shadow 0.15s',
-                  boxShadow: '0 2px 8px rgba(74,158,142,0.3)',
-                }}
-                onMouseEnter={e => {
-                  (e.target as HTMLElement).style.transform = 'translateY(-1px)'
-                  ;(e.target as HTMLElement).style.boxShadow = '0 4px 12px rgba(74,158,142,0.4)'
-                }}
-                onMouseLeave={e => {
-                  (e.target as HTMLElement).style.transform = 'translateY(0)'
-                  ;(e.target as HTMLElement).style.boxShadow = '0 2px 8px rgba(74,158,142,0.3)'
-                }}
-              >
-                {lang === 'de' ? 'Weiter' : 'Continue'} →
-              </button>
+              {/* Phase-Abschluss Header */}
+              <div style={{
+                fontSize: 13, fontWeight: 700, color: 'var(--accent-teal)',
+                textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12,
+              }}>
+                {currentModuleDef
+                  ? `${lang === 'de' ? currentModuleDef.nameDE : currentModuleDef.name} — abgeschlossen`
+                  : 'Phase abgeschlossen'}
+              </div>
+
+              {/* Download-Optionen */}
+              <div style={{ marginBottom: hasNextModule() ? 16 : 0 }}>
+                <div style={{
+                  fontSize: 12, color: 'var(--text-muted)', marginBottom: 10,
+                }}>
+                  {lang === 'de' ? 'Ergebnisse exportieren:' : 'Export results:'}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {[
+                    { format: 'pdf', label: 'PDF' },
+                    { format: 'pptx', label: 'PowerPoint' },
+                    { format: 'docx', label: 'Word' },
+                  ].map(({ format, label }) => (
+                    <a
+                      key={format}
+                      href={`/api/export?sessionId=${sessionId}&format=${format}`}
+                      download
+                      style={{
+                        padding: '8px 16px', borderRadius: 8,
+                        background: 'var(--bg-primary)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-secondary)',
+                        fontSize: 12, fontWeight: 500,
+                        textDecoration: 'none',
+                        cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        transition: 'border-color 0.15s',
+                      }}
+                      onMouseEnter={e => {
+                        (e.target as HTMLElement).style.borderColor = 'var(--accent-teal)'
+                        ;(e.target as HTMLElement).style.color = 'var(--text-primary)'
+                      }}
+                      onMouseLeave={e => {
+                        (e.target as HTMLElement).style.borderColor = 'var(--border)'
+                        ;(e.target as HTMLElement).style.color = 'var(--text-secondary)'
+                      }}
+                    >
+                      <span style={{ fontSize: 14 }}>↓</span> {label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+
+              {/* Weiter-Button */}
+              {hasNextModule() && (
+                <div style={{
+                  paddingTop: 16,
+                  borderTop: '1px solid var(--border)',
+                  display: 'flex', justifyContent: 'flex-end',
+                }}>
+                  <button
+                    onClick={handleAdvance}
+                    style={{
+                      padding: '10px 28px', borderRadius: 10,
+                      background: 'var(--accent-teal)',
+                      color: 'white', fontSize: 14, fontWeight: 600,
+                      border: 'none', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      transition: 'transform 0.15s, box-shadow 0.15s',
+                      boxShadow: '0 2px 8px rgba(74,158,142,0.3)',
+                    }}
+                    onMouseEnter={e => {
+                      (e.target as HTMLElement).style.transform = 'translateY(-1px)'
+                    }}
+                    onMouseLeave={e => {
+                      (e.target as HTMLElement).style.transform = 'translateY(0)'
+                    }}
+                  >
+                    {lang === 'de' ? 'Weiter' : 'Continue'} →
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

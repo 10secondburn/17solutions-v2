@@ -66,6 +66,11 @@ Antworte ZUERST mit einer klaren, strategischen Empfehlung (3-4 Absaetze):
 - Skizziere das strategische Narrativ in 2-3 Saetzen
 - Benenne moegliche Risiken und wie man ihnen begegnet
 
+Dann schliesse mit einer klar abgesetzten Zusammenfassung:
+
+### Erkenntnisse
+Fasse die 3-5 wichtigsten strategischen Erkenntnisse in Bulletpoints zusammen. Fokus auf: welches SDG den groessten strategischen Hebel hat, was das Narrativ einzigartig macht, und welche naechsten Schritte sinnvoll waeren.
+
 Dann liefere den strukturierten Block:
 
 \`\`\`json
@@ -134,6 +139,12 @@ Based on previous analyses:
 
 ## Output Format
 First respond with a clear strategic recommendation (3-4 paragraphs).
+
+Then close with a clearly separated summary:
+
+### Key Insights
+Summarize the 3-5 most important strategic insights as bullet points. Focus on: which SDG has the greatest strategic leverage, what makes the narrative unique, and what next steps are advisable.
+
 Then provide the structured block:
 
 \`\`\`json
