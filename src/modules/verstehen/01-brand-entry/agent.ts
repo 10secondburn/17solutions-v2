@@ -17,7 +17,7 @@ export const brandEntryModule: ModuleExecutor = {
 
   async execute(context: SessionContext, userInput: string): Promise<ModuleResult> {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const systemPrompt = getBrandEntrySystemPrompt(context.language)
+    const systemPrompt = getBrandEntrySystemPrompt(context.language, context.brandName)
 
     const messages: Anthropic.MessageParam[] = [
       { role: 'user', content: userInput },
@@ -75,7 +75,7 @@ export const brandEntryModule: ModuleExecutor = {
    */
   async executeStream(context: SessionContext, userInput: string) {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const systemPrompt = getBrandEntrySystemPrompt(context.language)
+    const systemPrompt = getBrandEntrySystemPrompt(context.language, context.brandName)
 
     const messages: Anthropic.MessageParam[] = [
       { role: 'user', content: userInput },

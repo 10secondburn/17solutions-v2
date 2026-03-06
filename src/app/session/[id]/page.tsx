@@ -34,6 +34,7 @@ export default function SessionPage() {
   const [streaming, setStreaming] = useState(false)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [autoStarted, setAutoStarted] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -66,22 +67,32 @@ export default function SessionPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Nachricht senden — Streaming SSE
-  const sendMessage = useCallback(async () => {
-    if (!input.trim() || sending) return
-    const userInput = input.trim()
-    setInput('')
+  // === AUTO-START: Wenn Session geladen und keine Messages → KI sofort starten ===
+  useEffect(() => {
+    if (!session || loading || autoStarted || messages.length > 0) return
+    setAutoStarted(true)
+
+    // Automatisch die erste Analyse starten
+    const brandName = session.brandName
+    sendToOrchestrator(`Analysiere die Marke ${brandName}. Starte mit dem Brand Entry.`, true)
+  }, [session, loading, autoStarted, messages.length])
+
+  // Generische Send-Funktion
+  async function sendToOrchestrator(userInput: string, isAutoStart = false) {
+    if (sending) return
     setSending(true)
 
-    // Optimistisch User-Message anzeigen
-    const userMsg: Message = {
-      id: `temp-${Date.now()}`,
-      role: 'user',
-      content: userInput,
-      moduleId: session?.currentModule,
-      createdAt: new Date().toISOString(),
+    // Bei Auto-Start keine User-Bubble zeigen (der User hat nichts getippt)
+    if (!isAutoStart) {
+      const userMsg: Message = {
+        id: `temp-${Date.now()}`,
+        role: 'user',
+        content: userInput,
+        moduleId: session?.currentModule,
+        createdAt: new Date().toISOString(),
+      }
+      setMessages(prev => [...prev, userMsg])
     }
-    setMessages(prev => [...prev, userMsg])
 
     // Leere Assistant-Message anlegen (wird per Streaming gefüllt)
     const assistantMsgId = `stream-${Date.now()}`
@@ -97,11 +108,15 @@ export default function SessionPage() {
       const res = await fetch('/api/orchestrator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, userInput }),
+        body: JSON.stringify({
+          sessionId,
+          userInput,
+          action: isAutoStart ? 'auto_start' : undefined,
+        }),
       })
 
       if (!res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         setMessages(prev => prev.filter(m => m.id !== assistantMsgId))
         setMessages(prev => [...prev, {
           id: `err-${Date.now()}`,
@@ -115,7 +130,6 @@ export default function SessionPage() {
       // SSE Stream lesen
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
-
       if (!reader) throw new Error('No reader')
 
       let buffer = ''
@@ -126,7 +140,7 @@ export default function SessionPage() {
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Unvollständige letzte Zeile behalten
+        buffer = lines.pop() || ''
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
@@ -134,7 +148,6 @@ export default function SessionPage() {
             const event = JSON.parse(line.slice(6))
 
             if (event.type === 'token') {
-              // Token an bestehende Assistant-Message anhängen
               setMessages(prev => prev.map(m =>
                 m.id === assistantMsgId
                   ? { ...m, content: m.content + event.text }
@@ -143,20 +156,17 @@ export default function SessionPage() {
             }
 
             if (event.type === 'module' && event.currentModule && session) {
-              setSession({ ...session, currentModule: event.currentModule })
+              setSession(s => s ? { ...s, currentModule: event.currentModule } : s)
             }
 
             if (event.type === 'done') {
-              // ModuleId setzen
               if (event.currentModule) {
                 setMessages(prev => prev.map(m =>
                   m.id === assistantMsgId
                     ? { ...m, moduleId: event.currentModule }
                     : m
                 ))
-                if (session) {
-                  setSession({ ...session, currentModule: event.currentModule })
-                }
+                setSession(s => s ? { ...s, currentModule: event.currentModule } : s)
               }
             }
 
@@ -184,6 +194,14 @@ export default function SessionPage() {
       setStreaming(false)
       inputRef.current?.focus()
     }
+  }
+
+  // User-Message senden
+  const sendMessage = useCallback(async () => {
+    if (!input.trim() || sending) return
+    const userInput = input.trim()
+    setInput('')
+    sendToOrchestrator(userInput, false)
   }, [input, sending, sessionId, session])
 
   // Enter zum Senden
@@ -215,9 +233,14 @@ export default function SessionPage() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 56px)', color: 'var(--text-muted)' }}>
-        Laden...
-      </div>
+      <AppShell>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          height: 'calc(100vh - 56px)', color: 'var(--text-muted)',
+        }}>
+          Laden…
+        </div>
+      </AppShell>
     )
   }
 
@@ -245,7 +268,7 @@ export default function SessionPage() {
           padding: '20px 16px 12px',
           borderBottom: '1px solid var(--border)',
         }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Session</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Projekt</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{session.brandName}</div>
         </div>
 
@@ -253,7 +276,6 @@ export default function SessionPage() {
         <div style={{ flex: 1, overflow: 'auto', padding: '12px 0' }}>
           {CLUSTERS.map(cluster => (
             <div key={cluster.id} style={{ marginBottom: 8 }}>
-              {/* Cluster Header */}
               <div style={{
                 padding: '8px 16px',
                 fontSize: 11,
@@ -264,8 +286,6 @@ export default function SessionPage() {
               }}>
                 {cluster.name}
               </div>
-
-              {/* Modules */}
               {cluster.modules.map(mod => {
                 const complete = isModuleComplete(mod.id)
                 const current = isCurrentModule(mod.id)
@@ -287,9 +307,8 @@ export default function SessionPage() {
                       gap: 8,
                     }}
                   >
-                    {/* Status Indicator */}
                     <span style={{ fontSize: 10 }}>
-                      {complete ? '✓' : current ? '●' : comingSoon ? '○' : '○'}
+                      {complete ? '✓' : current ? '●' : '○'}
                     </span>
                     <span>{lang === 'de' ? mod.nameDE : mod.name}</span>
                   </div>
@@ -356,21 +375,17 @@ export default function SessionPage() {
           flex: 1, overflow: 'auto',
           padding: '24px 24px 0',
         }}>
-          {/* Welcome Message wenn noch keine Messages */}
-          {messages.length === 0 && (
+          {/* Analyse-Start-Indikator wenn noch keine Messages und Auto-Start läuft */}
+          {messages.length === 0 && !sending && (
             <div style={{
-              textAlign: 'center', padding: '60px 40px',
+              textAlign: 'center', padding: '80px 40px',
               color: 'var(--text-muted)',
             }}>
-              <div style={{ fontSize: 36, marginBottom: 16 }}>🌍</div>
               <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
                 {session.brandName}
               </h2>
-              <p style={{ fontSize: 14, lineHeight: 1.6, maxWidth: 480, margin: '0 auto' }}>
-                {lang === 'de'
-                  ? `Starte die Analyse, indem du den Markennamen bestätigst oder zusätzliche Informationen über ${session.brandName} teilst.`
-                  : `Start the analysis by confirming the brand name or sharing additional information about ${session.brandName}.`
-                }
+              <p style={{ fontSize: 14, lineHeight: 1.6 }}>
+                Analyse wird vorbereitet…
               </p>
             </div>
           )}
@@ -401,19 +416,27 @@ export default function SessionPage() {
                 whiteSpace: 'pre-wrap',
               }}>
                 {msg.content}
+                {/* Streaming Cursor */}
+                {streaming && msg.id.startsWith('stream-') && msg.content.length > 0 && (
+                  <span style={{ opacity: 0.5, animation: 'pulse 1s infinite' }}>▍</span>
+                )}
               </div>
             </div>
           ))}
 
-          {/* Typing Indicator — nur vor dem ersten Token, nicht während Streaming */}
-          {sending && !streaming && (
+          {/* Typing Indicator */}
+          {sending && messages.filter(m => m.id.startsWith('stream-') && m.content.length > 0).length === 0 && (
             <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'flex-start' }}>
               <div style={{
                 padding: '14px 18px', borderRadius: '16px 16px 16px 4px',
                 background: 'var(--bg-card)', border: '1px solid var(--border)',
                 color: 'var(--text-muted)', fontSize: 14,
               }}>
-                <span style={{ animation: 'pulse 1.5s infinite' }}>●●●</span>
+                <span style={{ display: 'inline-flex', gap: 4 }}>
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                </span>
               </div>
             </div>
           )}
@@ -436,7 +459,7 @@ export default function SessionPage() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={lang === 'de' ? 'Nachricht eingeben...' : 'Type your message...'}
+              placeholder={lang === 'de' ? 'Nachricht eingeben…' : 'Type your message…'}
               rows={1}
               style={{
                 flex: 1, padding: '12px 16px', borderRadius: 12,
@@ -458,7 +481,7 @@ export default function SessionPage() {
                 whiteSpace: 'nowrap',
               }}
             >
-              {sending ? '...' : lang === 'de' ? 'Senden' : 'Send'}
+              {sending ? '…' : lang === 'de' ? 'Senden' : 'Send'}
             </button>
           </div>
         </div>
