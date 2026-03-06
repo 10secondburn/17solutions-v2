@@ -1,9 +1,36 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { CLUSTERS, MODULES, type ModuleDefinition } from '@/types'
 import AppShell from '@/components/AppShell'
+import casesData from '@/data/cases.json'
+
+interface CaseItem {
+  id: string
+  name: string
+  brand: string
+  agency: string
+  year: number
+  award: string
+  sdgs: number[]
+  type: string
+  industry: string
+  region: string
+  context: string
+  insight: string
+  solution: string
+  results: string
+  source: string
+}
+
+const cases: CaseItem[] = casesData as CaseItem[]
+
+const SDG_COLORS: Record<number, string> = {
+  1:'#E5243B',2:'#DDA63A',3:'#4C9F38',4:'#C5192D',5:'#FF3A21',6:'#26BDE2',
+  7:'#FCC30B',8:'#A21942',9:'#FD6925',10:'#DD1367',11:'#FD9D24',12:'#BF8B2E',
+  13:'#3F7E44',14:'#0A97D9',15:'#56C02B',16:'#00689D',17:'#19486A',
+}
 
 interface Message {
   id: string
@@ -35,8 +62,21 @@ export default function SessionPage() {
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [autoStarted, setAutoStarted] = useState(false)
+  const [showCases, setShowCases] = useState(false)
+  const [caseFilter, setCaseFilter] = useState('')
+  const [sdgFilter, setSdgFilter] = useState<number | null>(null)
+  const [expandedCase, setExpandedCase] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Cases filtern
+  const filteredCases = useMemo(() => cases.filter(c => {
+    const matchesText = !caseFilter ||
+      c.brand.toLowerCase().includes(caseFilter.toLowerCase()) ||
+      c.name.toLowerCase().includes(caseFilter.toLowerCase()) ||
+      c.industry.toLowerCase().includes(caseFilter.toLowerCase())
+    return matchesText && (!sdgFilter || c.sdgs.includes(sdgFilter))
+  }), [caseFilter, sdgFilter])
 
   // Session + Messages laden
   useEffect(() => {
@@ -318,17 +358,28 @@ export default function SessionPage() {
           ))}
         </div>
 
-        {/* Zurück Button */}
-        <div style={{ padding: 16, borderTop: '1px solid var(--border)' }}>
+        {/* Sidebar Footer */}
+        <div style={{ padding: 12, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button
+            onClick={() => setShowCases(!showCases)}
+            style={{
+              width: '100%', padding: '9px 12px', borderRadius: 8,
+              background: showCases ? 'var(--accent-teal)' : 'var(--bg-card)',
+              color: showCases ? 'white' : 'var(--text-secondary)',
+              fontSize: 12, fontWeight: 500, border: '1px solid var(--border)', cursor: 'pointer',
+            }}
+          >
+            {showCases ? 'Cases schliessen' : 'Case Library'}
+          </button>
           <button
             onClick={() => router.push('/dashboard')}
             style={{
               width: '100%', padding: '8px 12px', borderRadius: 8,
               background: 'transparent', color: 'var(--text-muted)',
-              fontSize: 13, border: '1px solid var(--border)', cursor: 'pointer',
+              fontSize: 12, border: '1px solid var(--border)', cursor: 'pointer',
             }}
           >
-            ← {lang === 'de' ? 'Zur Übersicht' : 'Back to Dashboard'}
+            ← {lang === 'de' ? 'Zur Übersicht' : 'Back'}
           </button>
         </div>
       </aside>
@@ -486,6 +537,132 @@ export default function SessionPage() {
           </div>
         </div>
       </div>
+      {/* === Cases Panel (Slide-Out rechts) === */}
+      {showCases && (
+        <div className="cases-panel">
+          {/* Header */}
+          <div style={{ padding: 18, borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600 }}>Case Library</h2>
+              <button
+                onClick={() => setShowCases(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}
+              >
+                x
+              </button>
+            </div>
+
+            {/* Search */}
+            <input
+              type="text"
+              placeholder={lang === 'de' ? 'Marke, Case oder Branche suchen…' : 'Search brands, cases, industries…'}
+              value={caseFilter}
+              onChange={e => setCaseFilter(e.target.value)}
+              style={{
+                width: '100%', fontSize: 13, padding: '10px 14px', borderRadius: 10,
+                background: 'var(--bg-input)', border: '1px solid var(--border)',
+                color: 'var(--text-primary)', outline: 'none', fontFamily: 'inherit',
+                marginBottom: 10, boxSizing: 'border-box' as const,
+              }}
+            />
+
+            {/* SDG Filter Dots */}
+            <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5 }}>
+              {Array.from({ length: 17 }, (_, i) => i + 1).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSdgFilter(sdgFilter === s ? null : s)}
+                  style={{
+                    width: 22, height: 22, borderRadius: '50%',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, fontWeight: 700, color: sdgFilter === s ? '#fff' : 'var(--text-muted)',
+                    background: sdgFilter === s ? SDG_COLORS[s] : 'var(--bg-input)',
+                    border: `1px solid ${sdgFilter === s ? SDG_COLORS[s] : 'var(--border)'}`,
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {/* Count */}
+            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)' }}>
+              {filteredCases.length} {filteredCases.length === 1 ? 'Case' : 'Cases'}
+            </div>
+          </div>
+
+          {/* Cases List */}
+          <div style={{ flex: 1, overflowY: 'auto' as const, padding: 10 }}>
+            {filteredCases.map(c => (
+              <div
+                key={c.id}
+                className={`case-card ${expandedCase === c.id ? 'expanded' : ''}`}
+                onClick={() => setExpandedCase(expandedCase === c.id ? null : c.id)}
+              >
+                {/* Card Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{c.brand}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{c.name}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                    {c.sdgs.slice(0, 3).map(s => (
+                      <span
+                        key={s}
+                        style={{
+                          width: 20, height: 20, borderRadius: '50%',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 8, fontWeight: 700, color: '#fff',
+                          background: SDG_COLORS[s],
+                        }}
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Expanded Details */}
+                {expandedCase === c.id && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                    {[
+                      { label: 'Context', text: c.context },
+                      { label: 'Insight', text: c.insight },
+                      { label: 'Solution', text: c.solution },
+                      { label: 'Results', text: c.results },
+                    ].map(x => (
+                      <div key={x.label} style={{ marginBottom: 10 }}>
+                        <div style={{
+                          fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const,
+                          color: 'var(--text-muted)', marginBottom: 3, letterSpacing: 0.5,
+                        }}>
+                          {x.label}
+                        </div>
+                        <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                          {x.text}
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{
+                      display: 'flex', gap: 8, marginTop: 8, fontSize: 10,
+                      color: 'var(--text-muted)', flexWrap: 'wrap' as const,
+                    }}>
+                      <span>{c.industry}</span>
+                      <span>·</span>
+                      <span>{c.region}</span>
+                      <span>·</span>
+                      <span>{c.year}</span>
+                      <span>·</span>
+                      <span>{c.type}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
     </AppShell>
   )
