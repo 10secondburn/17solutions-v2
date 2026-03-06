@@ -1,12 +1,27 @@
-import { redirect } from 'next/navigation'
-import { auth } from '@/lib/auth/config'
+'use client'
 
-export default async function Home() {
-  const session = await auth()
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
-  if (session?.user) {
-    redirect('/dashboard')
-  } else {
-    redirect('/login')
-  }
+export default function Home() {
+  const router = useRouter()
+  useEffect(() => {
+    // Session-Check via API, dann weiterleiten
+    fetch('/api/auth/session')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.user) {
+          router.replace('/dashboard')
+        } else {
+          router.replace('/login')
+        }
+      })
+      .catch(() => router.replace('/login'))
+  }, [router])
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text-muted)' }}>
+      Laden...
+    </div>
+  )
 }

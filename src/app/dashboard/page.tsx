@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { CLUSTERS } from '@/types'
+import AppShell from '@/components/AppShell'
 
 interface SessionItem {
   id: string
@@ -46,6 +47,7 @@ export default function DashboardPage() {
   }
 
   return (
+    <AppShell>
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
         <h1 style={{ fontSize: 28, fontWeight: 700 }}>Sessions</h1>
@@ -157,5 +159,6 @@ export default function DashboardPage() {
         </div>
       )}
     </div>
+    </AppShell>
   )
 }

@@ -1,17 +1,43 @@
-import { redirect } from 'next/navigation'
-import { auth } from '@/lib/auth/config'
+'use client'
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth()
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
-  if (!session?.user) {
-    redirect('/login')
+interface User {
+  name?: string | null
+  email?: string | null
+  role?: string
+}
+
+export default function AppShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/auth/session')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.user) {
+          setUser(data.user)
+        } else {
+          router.replace('/login')
+        }
+      })
+      .catch(() => router.replace('/login'))
+      .finally(() => setLoading(false))
+  }, [router])
+
+  if (loading || !user) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text-muted)' }}>
+        Laden...
+      </div>
+    )
   }
 
-  const user = session.user as any
-
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div style={{ minHeight: '100vh' }}>
       {/* Header */}
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, height: 56,
@@ -21,7 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         padding: '0 24px', zIndex: 100,
       }}>
         {/* Left: Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
           <div style={{
             width: 32, height: 32, borderRadius: '50%',
             background: 'linear-gradient(135deg, #e87461, #d45a48)',
@@ -31,9 +57,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
             17solutions
           </span>
-        </div>
+        </a>
 
-        {/* Right: Language + User */}
+        {/* Right: User */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{
             display: 'flex', gap: 4, padding: '4px',
@@ -66,8 +92,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </div>
 
-      {/* Main Content (below header) */}
-      <main style={{ flex: 1, paddingTop: 56 }}>
+      {/* Main Content */}
+      <main style={{ paddingTop: 56 }}>
         {children}
       </main>
     </div>

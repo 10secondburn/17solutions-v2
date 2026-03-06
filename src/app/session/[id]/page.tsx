@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { CLUSTERS, MODULES, type ModuleDefinition } from '@/types'
+import AppShell from '@/components/AppShell'
 
 interface Message {
   id: string
@@ -227,6 +228,7 @@ export default function SessionPage() {
   const currentCluster = getClusterForModule(session.currentModule)
 
   return (
+    <AppShell>
     <div style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
       {/* === Sidebar: Phase Navigation === */}
       <aside style={{
@@ -462,5 +464,6 @@ export default function SessionPage() {
         </div>
       </div>
     </div>
+    </AppShell>
   )
 }

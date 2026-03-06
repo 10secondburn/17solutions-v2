@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import AppShell from '@/components/AppShell'
 
 interface UserUsage {
   userId: string
@@ -90,13 +91,16 @@ export default function AdminUsagePage() {
 
   if (error) {
     return (
+      <AppShell>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px', textAlign: 'center' }}>
         <p style={{ color: 'var(--accent-coral)', fontSize: 16 }}>{error}</p>
       </div>
+      </AppShell>
     )
   }
 
   return (
+    <AppShell>
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
@@ -219,5 +223,6 @@ export default function AdminUsagePage() {
         </div>
       )}
     </div>
+    </AppShell>
   )
 }
