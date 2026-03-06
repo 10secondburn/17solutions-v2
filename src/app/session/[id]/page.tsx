@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { CLUSTERS, MODULES, type ModuleDefinition } from '@/types'
 import AppShell from '@/components/AppShell'
+import { renderMessage } from '@/components/MessageRenderer'
 import casesData from '@/data/cases.json'
 
 interface CaseItem {
@@ -401,23 +402,33 @@ export default function SessionPage() {
 
       {/* === Main Chat Area === */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* Module Header */}
+        {/* Module Header mit Brand Pill */}
         <div style={{
           padding: '12px 24px',
           borderBottom: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', gap: 12,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          {currentCluster && (
-            <span style={{
-              fontSize: 11, fontWeight: 700, color: currentCluster.color,
-              padding: '3px 10px', borderRadius: 6,
-              border: `1px solid ${currentCluster.color}`,
-            }}>
-              {currentCluster.name}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {currentCluster && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: currentCluster.color,
+                padding: '3px 10px', borderRadius: 6,
+                border: `1px solid ${currentCluster.color}`,
+              }}>
+                {currentCluster.name}
+              </span>
+            )}
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
+              {currentModuleDef ? (lang === 'de' ? currentModuleDef.nameDE : currentModuleDef.name) : session.currentModule}
             </span>
-          )}
-          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
-            {currentModuleDef ? (lang === 'de' ? currentModuleDef.nameDE : currentModuleDef.name) : session.currentModule}
+          </div>
+          {/* Brand Pill */}
+          <span style={{
+            fontSize: 13, fontWeight: 600, color: '#fff',
+            padding: '5px 16px', borderRadius: 20,
+            background: 'var(--accent-coral)',
+          }}>
+            {session.brandName}
           </span>
         </div>
 
@@ -432,17 +443,20 @@ export default function SessionPage() {
               textAlign: 'center', padding: '80px 40px',
               color: 'var(--text-muted)',
             }}>
-              <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
-                {session.brandName}
-              </h2>
               <p style={{ fontSize: 14, lineHeight: 1.6 }}>
                 Analyse wird vorbereitet…
               </p>
             </div>
           )}
 
-          {/* Message List */}
-          {messages.map(msg => (
+          {/* Message List — filtere Auto-Start-Messages raus */}
+          {messages
+            .filter(msg => {
+              // Auto-Start-Messages aus DB verstecken (User hat sie nicht getippt)
+              if (msg.role === 'user' && msg.content.startsWith('Analysiere die Marke ')) return false
+              return true
+            })
+            .map(msg => (
             <div
               key={msg.id}
               style={{
@@ -451,27 +465,42 @@ export default function SessionPage() {
                 justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
               }}
             >
-              <div style={{
-                maxWidth: msg.role === 'user' ? '70%' : '85%',
-                padding: '14px 18px',
-                borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                background: msg.role === 'user'
-                  ? 'var(--accent-teal)'
-                  : msg.role === 'system'
-                    ? 'rgba(232, 116, 97, 0.15)'
-                    : 'var(--bg-card)',
-                color: msg.role === 'user' ? 'white' : 'var(--text-primary)',
-                border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
-                fontSize: 14,
-                lineHeight: 1.7,
-                whiteSpace: 'pre-wrap',
-              }}>
-                {msg.content}
-                {/* Streaming Cursor */}
-                {streaming && msg.id.startsWith('stream-') && msg.content.length > 0 && (
-                  <span style={{ opacity: 0.5, animation: 'pulse 1s infinite' }}>▍</span>
-                )}
-              </div>
+              {msg.role === 'assistant' ? (
+                /* Assistant: Formatiertes Markdown */
+                <div
+                  className="chat-content"
+                  style={{
+                    maxWidth: '85%',
+                    padding: '16px 20px',
+                    borderRadius: '16px 16px 16px 4px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    fontSize: 14,
+                    lineHeight: 1.7,
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: streaming && msg.id.startsWith('stream-')
+                      ? renderMessage(msg.content) + '<span style="opacity:0.4">▍</span>'
+                      : renderMessage(msg.content)
+                  }}
+                />
+              ) : (
+                /* User + System: Plain Text */
+                <div style={{
+                  maxWidth: msg.role === 'user' ? '70%' : '85%',
+                  padding: '14px 18px',
+                  borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                  background: msg.role === 'user'
+                    ? 'var(--accent-teal)'
+                    : 'rgba(232, 116, 97, 0.15)',
+                  color: msg.role === 'user' ? 'white' : 'var(--text-primary)',
+                  fontSize: 14,
+                  lineHeight: 1.7,
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {msg.content}
+                </div>
+              )}
             </div>
           ))}
 

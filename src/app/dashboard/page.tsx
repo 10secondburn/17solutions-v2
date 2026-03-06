@@ -14,11 +14,35 @@ interface SessionItem {
 }
 
 const EXAMPLE_BRANDS = [
-  { name: 'Nike', industry: 'Sportswear' },
-  { name: 'MANN+HUMMEL', industry: 'Filtration' },
-  { name: 'Siemens', industry: 'Technology' },
-  { name: 'Patagonia', industry: 'Outdoor' },
+  { name: 'Nike', desc: 'Sport & culture' },
+  { name: 'IKEA', desc: 'Home & living' },
+  { name: 'Siemens', desc: 'Tech & industry' },
+  { name: 'Patagonia', desc: 'Outdoor & activism' },
+  { name: 'Unilever', desc: 'FMCG & purpose' },
 ]
+
+function LogoIcon({ size = 80 }: { size?: number }) {
+  const cx = 50, cy = 50, outerR = 44, innerR = 26, pts = 17
+  const d: string[] = []
+  for (let i = 0; i < pts * 2; i++) {
+    const a = (Math.PI * 2 * i) / (pts * 2) - Math.PI / 2
+    const r = i % 2 === 0 ? outerR : innerR
+    d.push(`${i === 0 ? 'M' : 'L'}${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`)
+  }
+  d.push('Z')
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <defs>
+        <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#e87461" /><stop offset="100%" stopColor="#d45a48" />
+        </linearGradient>
+        <filter id="gl"><feGaussianBlur stdDeviation="3" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+      </defs>
+      <path d={d.join('')} fill="url(#lg)" filter="url(#gl)" />
+      <text x="50" y="56" textAnchor="middle" fontSize="22" fontWeight="800" fill="#fff" fontFamily="Inter,system-ui,sans-serif">17</text>
+    </svg>
+  )
+}
 
 export default function DashboardPage() {
   const [sessions, setSessions] = useState<SessionItem[]>([])
@@ -40,7 +64,6 @@ export default function DashboardPage() {
   async function startSession(name: string) {
     if (!name.trim() || creating) return
     setCreating(true)
-
     try {
       const res = await fetch('/api/sessions', {
         method: 'POST',
@@ -48,7 +71,6 @@ export default function DashboardPage() {
         body: JSON.stringify({ brandName: name.trim() }),
       })
       const session = await res.json()
-      // Redirect — die Session-Page startet automatisch die Analyse
       router.push(`/session/${session.id}`)
     } catch {
       setCreating(false)
@@ -65,151 +87,128 @@ export default function DashboardPage() {
     <AppShell>
       <div style={{ maxWidth: 860, margin: '0 auto', padding: '48px 24px' }}>
 
-        {/* === Hero / Welcome === */}
-        <div style={{ textAlign: 'center', marginBottom: hasSessions ? 48 : 56 }}>
-          <h1 style={{
-            fontSize: hasSessions ? 24 : 40,
-            fontWeight: 300,
-            letterSpacing: '-0.03em',
-            lineHeight: 1.15,
-            marginBottom: hasSessions ? 8 : 20,
-            transition: 'all 0.3s',
-          }}>
-            {hasSessions ? (
-              <>Willkommen zurück</>
-            ) : (
-              <>Finde die <strong style={{ fontWeight: 700 }}>SDG-Innovation</strong><br />für deine Marke</>
-            )}
-          </h1>
-          {!hasSessions && (
-            <p style={{
-              fontSize: 15,
-              color: 'var(--text-secondary)',
-              maxWidth: 480,
-              margin: '0 auto',
-              lineHeight: 1.7,
-            }}>
-              17solutions analysiert deine Marke und entwickelt nachhaltige Innovationsideen
-              entlang der UN Sustainable Development Goals.
-            </p>
-          )}
-        </div>
-
-        {/* === Neue Session starten === */}
-        <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: 16,
-          padding: hasSessions ? '28px 32px' : '36px 40px',
-          marginBottom: 40,
+        {/* === Hero === */}
+        <div className="landing" style={{
+          textAlign: 'center',
+          marginBottom: hasSessions ? 40 : 0,
+          padding: hasSessions ? 0 : '20px 0 40px',
+          height: 'auto',
         }}>
-          <div style={{
-            fontSize: 17,
-            fontWeight: 600,
-            marginBottom: hasSessions ? 16 : 24,
-            color: 'var(--text-primary)',
-          }}>
-            {hasSessions ? 'Neue Analyse starten' : 'Welche Marke möchtest du analysieren?'}
-          </div>
-
-          {/* Brand Input */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: !hasSessions ? 24 : 0 }}>
-            <input
-              type="text"
-              value={brandName}
-              onChange={e => setBrandName(e.target.value)}
-              placeholder="Markenname eingeben…"
-              onKeyDown={e => e.key === 'Enter' && startSession(brandName)}
-              disabled={creating}
-              style={{
-                flex: 1,
-                padding: '14px 18px',
-                borderRadius: 12,
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-primary)',
-                fontSize: 15,
-                outline: 'none',
-              }}
-            />
-            <button
-              onClick={() => startSession(brandName)}
-              disabled={creating || !brandName.trim()}
-              style={{
-                padding: '14px 28px',
-                borderRadius: 12,
-                background: creating || !brandName.trim() ? 'var(--text-muted)' : 'var(--accent-coral)',
-                color: 'white',
-                fontSize: 15,
-                fontWeight: 600,
-                border: 'none',
-                cursor: creating ? 'wait' : 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'background 0.2s',
-              }}
-            >
-              {creating ? 'Starte…' : 'Analyse starten'}
-            </button>
-          </div>
-
-          {/* Example Brand Cards — nur beim ersten Besuch */}
           {!hasSessions && (
-            <>
-              <div style={{
-                fontSize: 13,
-                color: 'var(--text-muted)',
-                marginBottom: 12,
-              }}>
-                Oder starte mit einem Beispiel:
-              </div>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {EXAMPLE_BRANDS.map(b => (
-                  <button
-                    key={b.name}
-                    onClick={() => startSession(b.name)}
-                    disabled={creating}
-                    style={{
-                      background: 'var(--bg-primary)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 12,
-                      padding: '14px 22px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      textAlign: 'center',
-                      minWidth: 120,
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.borderColor = 'var(--accent-coral)'
-                      e.currentTarget.style.transform = 'translateY(-2px)'
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.borderColor = 'var(--border)'
-                      e.currentTarget.style.transform = 'translateY(0)'
-                    }}
-                  >
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
-                      {b.name}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {b.industry}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </>
+            <div style={{ marginBottom: 24 }}><LogoIcon size={88} /></div>
           )}
+          <h1 className="landing-title" style={{
+            fontSize: hasSessions ? 28 : undefined,
+            marginBottom: hasSessions ? 12 : undefined,
+          }}>
+            <strong>17</strong>solutions
+          </h1>
+          <p className="landing-subtitle" style={{
+            marginBottom: hasSessions ? 0 : undefined,
+          }}>
+            {hasSessions
+              ? 'Starte eine neue Analyse oder setze ein bestehendes Projekt fort.'
+              : 'Every brand has an untold SDG story. We find it, shape it into strategy, and craft pitch-ready innovation concepts — in 12 steps.'
+            }
+          </p>
         </div>
 
-        {/* === Bisherige Projekte === */}
-        {hasSessions && (
-          <div>
+        {/* === Brand Input + Cards === */}
+        {!hasSessions ? (
+          <>
+            <p className="landing-question">Which brand do you want to transform?</p>
+            <div className="landing-brands">
+              {EXAMPLE_BRANDS.map(b => (
+                <div key={b.name} className="brand-card" onClick={() => startSession(b.name)}>
+                  <div className="brand-card-name">{b.name}</div>
+                  <div className="brand-card-industry">{b.desc}</div>
+                </div>
+              ))}
+            </div>
+            <p className="landing-hint">Click a brand above to get started, or type your own below</p>
+
+            {/* Custom Input */}
             <div style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              marginBottom: 14,
+              maxWidth: 560, margin: '28px auto 0',
+              display: 'flex', gap: 12,
+            }}>
+              <input
+                type="text"
+                value={brandName}
+                onChange={e => setBrandName(e.target.value)}
+                placeholder="Oder eigenen Markennamen eingeben…"
+                onKeyDown={e => e.key === 'Enter' && startSession(brandName)}
+                disabled={creating}
+                style={{
+                  flex: 1, padding: '14px 18px', borderRadius: 12,
+                  background: 'var(--bg-input)', border: '1px solid var(--border)',
+                  color: 'var(--text-primary)', fontSize: 14, outline: 'none',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <button
+                onClick={() => startSession(brandName)}
+                disabled={creating || !brandName.trim()}
+                style={{
+                  padding: '14px 24px', borderRadius: 12,
+                  background: creating || !brandName.trim() ? 'var(--text-muted)' : 'var(--accent-coral)',
+                  color: 'white', fontSize: 14, fontWeight: 600,
+                  border: 'none', cursor: creating ? 'wait' : 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {creating ? 'Starte…' : 'Analyse starten'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Kompakteres Input für wiederkehrende User */}
+            <div style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: 14,
+              padding: '24px 28px',
+              marginBottom: 36,
+            }}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, color: 'var(--text-primary)' }}>
+                Neue Analyse starten
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <input
+                  type="text"
+                  value={brandName}
+                  onChange={e => setBrandName(e.target.value)}
+                  placeholder="Markenname eingeben…"
+                  onKeyDown={e => e.key === 'Enter' && startSession(brandName)}
+                  disabled={creating}
+                  style={{
+                    flex: 1, padding: '12px 16px', borderRadius: 10,
+                    background: 'var(--bg-input)', border: '1px solid var(--border)',
+                    color: 'var(--text-primary)', fontSize: 14, outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                <button
+                  onClick={() => startSession(brandName)}
+                  disabled={creating || !brandName.trim()}
+                  style={{
+                    padding: '12px 24px', borderRadius: 10,
+                    background: creating || !brandName.trim() ? 'var(--text-muted)' : 'var(--accent-coral)',
+                    color: 'white', fontSize: 14, fontWeight: 600,
+                    border: 'none', cursor: creating ? 'wait' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {creating ? 'Starte…' : 'Starten'}
+                </button>
+              </div>
+            </div>
+
+            {/* Projekte */}
+            <div style={{
+              fontSize: 12, fontWeight: 600, color: 'var(--text-muted)',
+              textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12,
             }}>
               Deine Projekte
             </div>
@@ -221,15 +220,10 @@ export default function DashboardPage() {
                     key={s.id}
                     onClick={() => router.push(`/session/${s.id}`)}
                     style={{
-                      padding: '16px 20px',
-                      borderRadius: 12,
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      transition: 'border-color 0.2s',
+                      padding: '16px 20px', borderRadius: 12,
+                      background: 'var(--bg-card)', border: '1px solid var(--border)',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center',
+                      justifyContent: 'space-between', transition: 'border-color 0.2s',
                     }}
                     onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-teal)')}
                     onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
@@ -256,10 +250,9 @@ export default function DashboardPage() {
                 )
               })}
             </div>
-          </div>
+          </>
         )}
 
-        {/* Loading State */}
         {loadingSessions && (
           <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 13 }}>
             Projekte laden…

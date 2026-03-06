@@ -146,6 +146,34 @@ body {
 .case-card.expanded { background: var(--bg-card); }
 .sdg-dot { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; flex-shrink: 0; }
 
+/* CONFIDENCE BADGES */
+.badge-verified {
+  display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.5px; background: rgba(74,158,142,0.15); color: #4a9e8e; border: 1px solid rgba(74,158,142,0.3);
+}
+.badge-plausible {
+  display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.5px; background: rgba(196,164,74,0.15); color: #c4a44a; border: 1px solid rgba(196,164,74,0.3);
+}
+.badge-hypothesis {
+  display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.5px; background: rgba(232,116,97,0.15); color: #e87461; border: 1px solid rgba(232,116,97,0.3);
+}
+
+/* CHAT RENDERED CONTENT — used in session page message bubbles */
+.chat-content h1 { font-size: 1.25rem; font-weight: 700; margin: 1.2rem 0 0.4rem; color: #fff; }
+.chat-content h2 { font-size: 1.1rem; font-weight: 700; margin: 1rem 0 0.3rem; color: #fff; }
+.chat-content h3 { font-size: 0.95rem; font-weight: 600; margin: 0.8rem 0 0.25rem; color: var(--text-primary); }
+.chat-content p { margin: 0.4rem 0; }
+.chat-content ul { list-style: disc; padding-left: 1.3rem; margin: 0.4rem 0; }
+.chat-content ol { list-style: decimal; padding-left: 1.3rem; margin: 0.4rem 0; }
+.chat-content li { margin: 0.2rem 0; line-height: 1.65; }
+.chat-content strong { font-weight: 700; color: #fff; }
+.chat-content em { font-style: italic; color: var(--accent-gold-light); }
+.chat-content code { background: var(--bg-input); padding: 2px 6px; border-radius: 4px; font-size: 12px; color: var(--accent-teal); }
+.chat-content blockquote { border-left: 3px solid var(--accent-teal); padding-left: 12px; color: var(--text-secondary); margin: 0.6rem 0; }
+.chat-content hr { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+
 @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 .typing-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); margin-right: 4px; animation: pulse 1.4s infinite; }
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
