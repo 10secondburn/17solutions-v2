@@ -5,6 +5,8 @@ import type { OrchestratorRequest } from './types'
 import { t } from '@/lib/language/translations'
 import type { Language } from '@/types'
 import { parseBrandEntryOutput } from '@/modules/verstehen/01-brand-entry/types'
+import { parseSDGMappingOutput } from '@/modules/verstehen/02-sdg-mapping/types'
+import { parseSDGSelectionOutput } from '@/modules/verstehen/03-sdg-selection/types'
 
 /**
  * Agent-Orchestrator — Streaming-Variante
@@ -43,11 +45,29 @@ export function executeOrchestratorStream(
         const wantsAdvance = request.action === 'advance' ||
           advanceKeywords.some(kw => request.userInput.toLowerCase().includes(kw))
 
+        let userInput = request.userInput
+
         if (wantsAdvance) {
           const nextModule = getNextAvailableModule(context.currentModule)
           if (nextModule) {
             await advanceModule(request.sessionId, nextModule)
             context.currentModule = nextModule
+
+            // Gib dem neuen Modul einen sinnvollen Trigger-Input
+            const triggerMessages: Record<string, Record<string, string>> = {
+              'verstehen_02': {
+                de: `Analysiere die Marke ${context.brandName} und erstelle ein SDG-Mapping. Bewerte alle 17 SDGs.`,
+                en: `Analyze the brand ${context.brandName} and create an SDG mapping. Score all 17 SDGs.`,
+              },
+              'verstehen_03': {
+                de: `Gib basierend auf dem SDG-Mapping eine klare Empfehlung, welches primaere SDG ${context.brandName} verfolgen sollte.`,
+                en: `Based on the SDG mapping, give a clear recommendation which primary SDG ${context.brandName} should pursue.`,
+              },
+            }
+            const trigger = triggerMessages[nextModule]
+            if (trigger) {
+              userInput = trigger[lang] || trigger['de']
+            }
           } else {
             controller.enqueue(sendEvent({ type: 'token', text: t('chat.comingSoon', lang) }))
             controller.enqueue(sendEvent({ type: 'done' }))
@@ -74,7 +94,7 @@ export function executeOrchestratorStream(
 
         // 5. Streaming — wenn executeStream vorhanden
         if (moduleExecutor.executeStream) {
-          const stream = await moduleExecutor.executeStream(context, request.userInput)
+          const stream = await moduleExecutor.executeStream(context, userInput)
           let fullText = ''
 
           stream.on('text', (text: string) => {
@@ -90,19 +110,39 @@ export function executeOrchestratorStream(
             model: 'claude-sonnet-4-20250514',
           }
 
-          // Output speichern
-          const brandData = parseBrandEntryOutput(fullText)
-          if (brandData) {
+          // Output speichern — modulspezifisch parsen
+          let parsedOutput: any = null
+          let confidenceScore: number | undefined
+
+          switch (context.currentModule) {
+            case 'verstehen_01': {
+              const data = parseBrandEntryOutput(fullText)
+              if (data) { parsedOutput = data; confidenceScore = data.confidenceScore }
+              break
+            }
+            case 'verstehen_02': {
+              const data = parseSDGMappingOutput(fullText)
+              if (data) { parsedOutput = data; confidenceScore = data.confidenceScore }
+              break
+            }
+            case 'verstehen_03': {
+              const data = parseSDGSelectionOutput(fullText)
+              if (data) { parsedOutput = data; confidenceScore = data.confidenceScore }
+              break
+            }
+          }
+
+          if (parsedOutput) {
             await saveModuleOutput({
               sessionId: request.sessionId,
               moduleId: context.currentModule,
-              outputData: brandData,
+              outputData: parsedOutput,
               citations: [{
                 sourceId: `src_${context.currentModule}_ki`,
                 type: 'KI',
                 name: 'Claude Sonnet 4 — Analysis',
               }],
-              confidenceScore: brandData.confidenceScore,
+              confidenceScore,
             })
           }
 
@@ -122,7 +162,7 @@ export function executeOrchestratorStream(
 
         } else {
           // Fallback: nicht-streaming Execute
-          const result = await moduleExecutor.execute(context, request.userInput)
+          const result = await moduleExecutor.execute(context, userInput)
 
           controller.enqueue(sendEvent({ type: 'token', text: result.response }))
 

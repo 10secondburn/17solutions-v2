@@ -9,8 +9,15 @@ const registry: Record<string, () => Promise<ModuleExecutor>> = {
     const mod = await import('@/modules/verstehen/01-brand-entry/agent')
     return mod.brandEntryModule
   },
+  'verstehen_02': async () => {
+    const mod = await import('@/modules/verstehen/02-sdg-mapping/agent')
+    return mod.sdgMappingModule
+  },
+  'verstehen_03': async () => {
+    const mod = await import('@/modules/verstehen/03-sdg-selection/agent')
+    return mod.sdgSelectionModule
+  },
   // Phase 2+: weitere Module registrieren
-  // 'verstehen_02': async () => { ... },
   // 'validieren_04': async () => { ... },
 }
 

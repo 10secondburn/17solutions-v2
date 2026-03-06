@@ -253,6 +253,25 @@ export default function SessionPage() {
     }
   }
 
+  // Weiter-Button: nächstes Modul starten
+  async function handleAdvance() {
+    if (sending) return
+    sendToOrchestrator('Weiter zum nächsten Schritt.', false)
+  }
+
+  // Prüfe ob das aktuelle Modul einen Nachfolger hat
+  function hasNextModule(): boolean {
+    if (!session) return false
+    const currentDef = MODULES.find(m => m.id === session.currentModule)
+    if (!currentDef) return false
+    const currentIdx = MODULES.findIndex(m => m.id === session.currentModule)
+    // Gibt es ein verfügbares Modul nach dem aktuellen?
+    for (let i = currentIdx + 1; i < MODULES.length; i++) {
+      if (MODULES[i].status === 'available') return true
+    }
+    return false
+  }
+
   function getModuleDef(moduleId: string): ModuleDefinition | undefined {
     return MODULES.find(m => m.id === moduleId)
   }
@@ -449,11 +468,13 @@ export default function SessionPage() {
             </div>
           )}
 
-          {/* Message List — filtere Auto-Start-Messages raus */}
+          {/* Message List — filtere Auto-Messages raus */}
           {messages
             .filter(msg => {
-              // Auto-Start-Messages aus DB verstecken (User hat sie nicht getippt)
+              // Auto-Start-Messages verstecken (User hat sie nicht getippt)
               if (msg.role === 'user' && msg.content.startsWith('Analysiere die Marke ')) return false
+              // "Weiter"-Klick-Messages verstecken
+              if (msg.role === 'user' && msg.content === 'Weiter zum nächsten Schritt.') return false
               return true
             })
             .map(msg => (
@@ -518,6 +539,37 @@ export default function SessionPage() {
                   <span className="typing-dot" />
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Weiter-Button nach abgeschlossener Analyse */}
+          {!sending && !streaming && messages.length > 0 && hasNextModule() && (
+            <div style={{
+              display: 'flex', justifyContent: 'center',
+              padding: '16px 0 8px',
+            }}>
+              <button
+                onClick={handleAdvance}
+                style={{
+                  padding: '12px 32px', borderRadius: 12,
+                  background: 'var(--accent-teal)',
+                  color: 'white', fontSize: 14, fontWeight: 600,
+                  border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  boxShadow: '0 2px 8px rgba(74,158,142,0.3)',
+                }}
+                onMouseEnter={e => {
+                  (e.target as HTMLElement).style.transform = 'translateY(-1px)'
+                  ;(e.target as HTMLElement).style.boxShadow = '0 4px 12px rgba(74,158,142,0.4)'
+                }}
+                onMouseLeave={e => {
+                  (e.target as HTMLElement).style.transform = 'translateY(0)'
+                  ;(e.target as HTMLElement).style.boxShadow = '0 2px 8px rgba(74,158,142,0.3)'
+                }}
+              >
+                {lang === 'de' ? 'Weiter' : 'Continue'} →
+              </button>
             </div>
           )}
 

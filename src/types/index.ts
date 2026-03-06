@@ -24,8 +24,8 @@ export const MODULES: ModuleDefinition[] = [
   // VERSTEHEN
   { id: 'verstehen_01', name: 'Brand Entry', nameDE: 'Marken-Einstieg', cluster: 'verstehen', stepNum: 1, status: 'available' },
   { id: 'verstehen_01b', name: 'Document Intake', nameDE: 'Dokumenten-Aufnahme', cluster: 'verstehen', stepNum: 2, status: 'coming_soon' },
-  { id: 'verstehen_02', name: 'SDG Mapping', nameDE: 'SDG-Zuordnung', cluster: 'verstehen', stepNum: 3, status: 'coming_soon' },
-  { id: 'verstehen_03', name: 'SDG Selection', nameDE: 'SDG-Auswahl', cluster: 'verstehen', stepNum: 4, status: 'coming_soon' },
+  { id: 'verstehen_02', name: 'SDG Mapping', nameDE: 'SDG-Zuordnung', cluster: 'verstehen', stepNum: 3, status: 'available' },
+  { id: 'verstehen_03', name: 'SDG Selection', nameDE: 'SDG-Auswahl', cluster: 'verstehen', stepNum: 4, status: 'available' },
   // VALIDIEREN
   { id: 'validieren_04', name: 'Reality Check', nameDE: 'Realitäts-Check', cluster: 'validieren', stepNum: 5, status: 'coming_soon' },
   { id: 'validieren_05', name: 'Target Research', nameDE: 'Zielgruppen-Research', cluster: 'validieren', stepNum: 6, status: 'coming_soon' },
