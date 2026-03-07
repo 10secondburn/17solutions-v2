@@ -1,37 +1,40 @@
-import { auth } from '@/lib/auth/config'
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 
-export default auth((req) => {
-  const { pathname } = req.nextUrl
-  const isLoggedIn = !!req.auth
+export async function middleware(request: NextRequest) {
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
+  })
+  const { pathname } = request.nextUrl
 
   // Öffentliche Routen
-  const publicPaths = ['/login', '/invite', '/api/auth']
+  const publicPaths = ['/login', '/invite', '/api/auth', '/api/health']
   if (publicPaths.some(p => pathname.startsWith(p))) {
     // Eingeloggt → weiter zum Dashboard
-    if (isLoggedIn && pathname === '/login') {
-      return NextResponse.redirect(new URL('/dashboard', req.url))
+    if (token && pathname === '/login') {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
     }
     return NextResponse.next()
   }
 
   // Nicht eingeloggt → Login
-  if (!isLoggedIn) {
-    const loginUrl = new URL('/login', req.url)
+  if (!token) {
+    const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
   // Admin-Routen prüfen
   if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
-    const role = (req.auth as any)?.user?.role
-    if (role !== 'admin') {
-      return NextResponse.redirect(new URL('/dashboard', req.url))
+    if (token.role !== 'admin') {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
 
   return NextResponse.next()
-})
+}
 
 export const config = {
   matcher: [
