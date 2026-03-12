@@ -5,6 +5,8 @@ import { useRouter, useParams } from 'next/navigation'
 import { CLUSTERS, MODULES, type ModuleDefinition } from '@/types'
 import AppShell from '@/components/AppShell'
 import { renderMessage } from '@/components/MessageRenderer'
+import SelectionPanel from '@/components/SelectionPanel'
+import { getSelectionConfig, getSelectableItems, getDefaultSelection, type SelectionConfig } from '@/lib/orchestrator/selection-config'
 import casesData from '@/data/cases.json'
 
 interface CaseItem {
@@ -48,6 +50,7 @@ interface SessionData {
   language: string
   mode: string
   status: string
+  completedModules?: string[]
 }
 
 export default function SessionPage() {
@@ -63,12 +66,40 @@ export default function SessionPage() {
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [autoStarted, setAutoStarted] = useState(false)
+  const autoStartedRef = useRef(false)
   const [showCases, setShowCases] = useState(false)
   const [caseFilter, setCaseFilter] = useState('')
   const [sdgFilter, setSdgFilter] = useState<number | null>(null)
   const [expandedCase, setExpandedCase] = useState<string | null>(null)
+  const [completedModules, setCompletedModules] = useState<string[]>([])
+  const [furthestModule, setFurthestModule] = useState<string>('verstehen_01')
+  // Selection State
+  const [selectionConfig, setSelectionConfig] = useState<SelectionConfig | null>(null)
+  const [selectionItems, setSelectionItems] = useState<any[]>([])
+  const [selectionDefaults, setSelectionDefaults] = useState<(string | number)[]>([])
+  const [selectionConfirmed, setSelectionConfirmed] = useState(false)
+  const [pendingSelection, setPendingSelection] = useState<(string | number)[] | null>(null)
+  // Debug: Sichtbarer Status fuer Selection-Troubleshooting
+  const [selectionDebug, setSelectionDebug] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  // Track last processed module for selection to prevent duplicate checks
+  const lastProcessedModuleRef = useRef<string | null>(null)
+
+  // === Performance: Streaming-Optimierung ===
+  // Token-Buffer: sammelt Tokens zwischen Frames (kein State-Update pro Token)
+  const streamBufferRef = useRef('')
+  // Aktueller Streaming-Content (akkumuliert, fuer renderMessage)
+  const streamContentRef = useRef('')
+  // Pre-gerendertes HTML fuer die aktive Streaming-Nachricht
+  const [streamingHtml, setStreamingHtml] = useState('')
+  // ID der aktiven Streaming-Nachricht
+  const streamMsgIdRef = useRef<string | null>(null)
+  // RAF ID fuer Cleanup
+  const rafIdRef = useRef<number | null>(null)
+  // Letzter renderMessage-Timestamp (Throttle)
+  const lastRenderRef = useRef(0)
+  const RENDER_THROTTLE_MS = 120 // renderMessage max alle 120ms
 
   // Cases filtern
   const filteredCases = useMemo(() => cases.filter(c => {
@@ -92,7 +123,12 @@ export default function SessionPage() {
         setSession(sessData)
         if (msgRes.ok) {
           const msgs = await msgRes.json()
-          setMessages(msgs)
+          // Funktionales Update: Wenn Auto-Start bereits Messages hinzugefügt hat,
+          // nicht mit leerer DB-Antwort überschreiben (React Strict Mode Schutz)
+          setMessages(prev => {
+            if (prev.length > 0) return prev
+            return msgs
+          })
         }
       } catch (e) {
         console.error(e)
@@ -103,23 +139,46 @@ export default function SessionPage() {
     load()
   }, [sessionId, router])
 
-  // Auto-scroll bei neuen Messages
+  // Auto-scroll bei neuen Messages oder Streaming-Updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, streamingHtml])
+
+  // Ref auf sendToOrchestrator — immer aktuell, kein stale closure
+  const sendToOrchestratorRef = useRef(sendToOrchestrator)
+  useEffect(() => { sendToOrchestratorRef.current = sendToOrchestrator })
+
+  // Ref um Messages-Länge für den Auto-Start zu tracken ohne Dependency
+  const messagesLenRef = useRef(messages.length)
+  useEffect(() => { messagesLenRef.current = messages.length })
 
   // === AUTO-START: Wenn Session geladen und keine Messages → KI sofort starten ===
   useEffect(() => {
-    if (!session || loading || autoStarted || messages.length > 0) return
+    if (!session || loading || autoStartedRef.current) return
+    // Existierende Session mit Messages — kein Auto-Start
+    if (messagesLenRef.current > 0) return
+
+    autoStartedRef.current = true
     setAutoStarted(true)
 
-    // Automatisch die erste Analyse starten
+    // setTimeout(0) damit der Ref-Update-Effect gelaufen ist
+    // und sendToOrchestratorRef.current die aktuelle Version hat
     const brandName = session.brandName
-    sendToOrchestrator(`Analysiere die Marke ${brandName}. Starte mit dem Brand Entry.`, true)
-  }, [session, loading, autoStarted, messages.length])
+    setTimeout(() => {
+      sendToOrchestratorRef.current(
+        `Analysiere die Marke ${brandName}. Starte mit dem Brand Entry.`,
+        true,
+      )
+    }, 50)
+  }, [session, loading, sessionId])
 
-  // Generische Send-Funktion
-  async function sendToOrchestrator(userInput: string, isAutoStart = false) {
+  // Unified Send-Funktion für alle Interaktionen
+  async function sendToOrchestrator(
+    userInput: string,
+    isAutoStart = false,
+    action?: string,
+    targetModule?: string,
+  ) {
     if (sending) return
     setSending(true)
 
@@ -129,7 +188,7 @@ export default function SessionPage() {
         id: `temp-${Date.now()}`,
         role: 'user',
         content: userInput,
-        moduleId: session?.currentModule,
+        moduleId: targetModule || session?.currentModule,
         createdAt: new Date().toISOString(),
       }
       setMessages(prev => [...prev, userMsg])
@@ -152,7 +211,8 @@ export default function SessionPage() {
         body: JSON.stringify({
           sessionId,
           userInput,
-          action: isAutoStart ? 'auto_start' : undefined,
+          action: action || (isAutoStart ? 'auto_start' : undefined),
+          ...(targetModule ? { targetModule } : {}),
         }),
       })
 
@@ -168,20 +228,49 @@ export default function SessionPage() {
         return
       }
 
-      // SSE Stream lesen
+      // === Optimiertes SSE-Streaming ===
+      // Tokens werden in einem Buffer gesammelt und per RAF geflusht.
+      // renderMessage() wird nur throttled aufgerufen (nicht pro Token).
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
       if (!reader) throw new Error('No reader')
 
-      let buffer = ''
+      // Streaming-State initialisieren
+      streamBufferRef.current = ''
+      streamContentRef.current = ''
+      streamMsgIdRef.current = assistantMsgId
+      lastRenderRef.current = 0
+
+      // RAF-basierter Flush: sammelt alle Tokens seit dem letzten Frame
+      const startStreamingLoop = () => {
+        const flush = () => {
+          if (streamBufferRef.current) {
+            // Buffer in Content uebernehmen
+            streamContentRef.current += streamBufferRef.current
+            streamBufferRef.current = ''
+
+            // Throttled Rendering: renderMessage nur alle RENDER_THROTTLE_MS
+            const now = performance.now()
+            if (now - lastRenderRef.current > RENDER_THROTTLE_MS) {
+              lastRenderRef.current = now
+              setStreamingHtml(renderMessage(streamContentRef.current) + '<span style="opacity:0.4">▍</span>')
+            }
+          }
+          rafIdRef.current = requestAnimationFrame(flush)
+        }
+        rafIdRef.current = requestAnimationFrame(flush)
+      }
+      startStreamingLoop()
+
+      let sseBuffer = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
+        sseBuffer += decoder.decode(value, { stream: true })
+        const lines = sseBuffer.split('\n')
+        sseBuffer = lines.pop() || ''
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
@@ -189,29 +278,120 @@ export default function SessionPage() {
             const event = JSON.parse(line.slice(6))
 
             if (event.type === 'token') {
-              setMessages(prev => prev.map(m =>
-                m.id === assistantMsgId
-                  ? { ...m, content: m.content + event.text }
-                  : m
-              ))
+              // Token nur in den Buffer schreiben — RAF macht den Rest
+              streamBufferRef.current += event.text
             }
 
-            if (event.type === 'module' && event.currentModule && session) {
-              setSession(s => s ? { ...s, currentModule: event.currentModule } : s)
+            if (event.type === 'module') {
+              if (event.currentModule) {
+                setSession(s => s ? { ...s, currentModule: event.currentModule } : s)
+              }
+              if (event.completedModules) setCompletedModules(event.completedModules)
+              if (event.furthestModule) setFurthestModule(event.furthestModule)
             }
 
             if (event.type === 'done') {
-              if (event.currentModule) {
-                setMessages(prev => prev.map(m =>
-                  m.id === assistantMsgId
-                    ? { ...m, moduleId: event.currentModule }
-                    : m
-                ))
-                setSession(s => s ? { ...s, currentModule: event.currentModule } : s)
+              // RAF stoppen
+              if (rafIdRef.current) {
+                cancelAnimationFrame(rafIdRef.current)
+                rafIdRef.current = null
               }
+
+              // Restlichen Buffer flushen
+              streamContentRef.current += streamBufferRef.current
+              streamBufferRef.current = ''
+
+              // Finales vollstaendiges Rendering (nicht throttled)
+              const finalContent = event.fullText || streamContentRef.current
+              const finalHtml = renderMessage(finalContent)
+
+              // In messages-Array uebernehmen (einmalig, nicht pro Token)
+              setMessages(prev => prev.map(m =>
+                m.id === assistantMsgId
+                  ? { ...m, content: finalContent, moduleId: event.currentModule || m.moduleId }
+                  : m
+              ))
+              setStreamingHtml('')
+              streamMsgIdRef.current = null
+
+              if (event.currentModule) {
+                setSession(s => s ? { ...s, currentModule: event.currentModule } : s)
+
+                // === SelectionPanel: ONLY process for CURRENT module, not previous ones ===
+                // BUG-06 FIX: Only check selection config once per module
+                if (lastProcessedModuleRef.current !== event.currentModule) {
+                  lastProcessedModuleRef.current = event.currentModule
+
+                  const selCfg = getSelectionConfig(event.currentModule)
+                  const dbg: string[] = [`mod=${event.currentModule}`, `cfg=${!!selCfg}`]
+
+                  if (selCfg) {
+                    let selResolved = false
+                    dbg.push(`eventSD=${!!event.selectionData}`, `sdLen=${event.selectionData?.items?.length || 0}`)
+
+                    // Versuch 1: Direkt vom Server
+                    if (event.selectionData?.items?.length > 0) {
+                      dbg.push('src=server')
+                      setSelectionConfig(selCfg)
+                      setSelectionItems(event.selectionData.items)
+                      setSelectionDefaults(event.selectionData.defaults || [])
+                      setSelectionConfirmed(false)
+                      setPendingSelection(null)
+                      selResolved = true
+                    }
+
+                    // Versuch 2: Aus fullText
+                    if (!selResolved && finalContent) {
+                      try {
+                        const jm = finalContent.match(/```json\s*([\s\S]*?)```/)
+                        dbg.push(`jsonBlock=${!!jm}`)
+                        if (jm) {
+                          const pd = JSON.parse(jm[1].trim())
+                          dbg.push(`keys=${Object.keys(pd).join(',')}`)
+                          const itms = getSelectableItems(event.currentModule, pd)
+                          dbg.push(`items=${itms.length}`)
+                          if (itms.length > 0) {
+                            setSelectionConfig(selCfg)
+                            setSelectionItems(itms)
+                            setSelectionDefaults(getDefaultSelection(event.currentModule, pd))
+                            setSelectionConfirmed(false)
+                            setPendingSelection(null)
+                            dbg.push('src=fullText')
+                            selResolved = true
+                          }
+                        }
+                      } catch (e: any) { dbg.push(`err=${e.message?.slice(0, 40)}`) }
+                    }
+
+                    if (!selResolved) {
+                      // Task 3: Enhanced diagnostic logging when extraction fails
+                      const fullTextLen = finalContent.length
+                      const hasJsonBlock = /```json\s*[\s\S]*?```/.test(finalContent)
+                      dbg.push(`FAIL|fullTextLen=${fullTextLen}|jsonBlock=${hasJsonBlock}`)
+                      setSelectionConfig(null)
+                      setSelectionItems([])
+                    }
+                  } else {
+                    setSelectionConfig(null)
+                    setSelectionItems([])
+                  }
+
+                  const debugStr = dbg.join(' | ')
+                  console.log('[SEL]', debugStr)
+                  setSelectionDebug(debugStr)
+                }
+              }
+              if (event.completedModules) setCompletedModules(event.completedModules)
+              if (event.furthestModule) setFurthestModule(event.furthestModule)
             }
 
             if (event.type === 'error') {
+              if (rafIdRef.current) {
+                cancelAnimationFrame(rafIdRef.current)
+                rafIdRef.current = null
+              }
+              streamMsgIdRef.current = null
+              setStreamingHtml('')
               setMessages(prev => prev.filter(m => m.id !== assistantMsgId))
               setMessages(prev => [...prev, {
                 id: `err-${Date.now()}`,
@@ -231,13 +411,21 @@ export default function SessionPage() {
         createdAt: new Date().toISOString(),
       }])
     } finally {
+      // Cleanup: RAF stoppen falls noch aktiv
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
+      streamMsgIdRef.current = null
+      streamBufferRef.current = ''
       setSending(false)
       setStreaming(false)
+      setStreamingHtml('')
       inputRef.current?.focus()
     }
   }
 
-  // User-Message senden
+  // User-Message senden (normale Konversation — KEIN Advance)
   const sendMessage = useCallback(async () => {
     if (!input.trim() || sending) return
     const userInput = input.trim()
@@ -253,10 +441,69 @@ export default function SessionPage() {
     }
   }
 
-  // Weiter-Button: nächstes Modul starten
+  // Selection bestätigt: Items merken
+  function handleSelectionConfirm(selectedIds: (string | number)[]) {
+    setPendingSelection(selectedIds)
+    setSelectionConfirmed(true)
+  }
+
+  // Weiter-Button: Selektion speichern, dann nächstes Modul starten
   async function handleAdvance() {
     if (sending) return
-    sendToOrchestrator('Weiter zum nächsten Schritt.', false)
+
+    // Selektion speichern (falls vorhanden)
+    const currentModule = session?.currentModule
+    if (currentModule && selectionConfig) {
+      const itemsToSave = pendingSelection || selectionDefaults
+      if (itemsToSave.length > 0) {
+        try {
+          await fetch('/api/selections', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId,
+              moduleId: currentModule,
+              selectedItems: itemsToSave,
+            }),
+          })
+        } catch (e) {
+          console.error('Selection save failed:', e)
+        }
+      }
+    }
+
+    // Selection State zurücksetzen
+    setSelectionConfig(null)
+    setSelectionItems([])
+    setSelectionDefaults([])
+    setSelectionConfirmed(false)
+    setPendingSelection(null)
+
+    sendToOrchestrator('Weiter zum nächsten Schritt.', false, 'advance')
+  }
+
+  // Rückwärts-Navigation: zu einem vorherigen Modul zurückkehren
+  async function handleRevisit(targetModuleId: string) {
+    if (sending || !session) return
+    const sessionLang = (session.language || 'de') as 'de' | 'en'
+    const moduleDef = getModuleDef(targetModuleId)
+    const moduleName = moduleDef ? (sessionLang === 'de' ? moduleDef.nameDE : moduleDef.name) : targetModuleId
+    const revisitInput = sessionLang === 'de'
+      ? `Ich möchte das Modul "${moduleName}" erneut bearbeiten. Zeige mir die bisherigen Ergebnisse und frag mich, was ich ändern oder vertiefen möchte.`
+      : `I want to revisit the "${moduleName}" module. Show me the previous results and ask what I'd like to change or deepen.`
+    sendToOrchestrator(revisitInput, false, 'revisit', targetModuleId)
+  }
+
+  // Zum weitesten Fortschritt zurückkehren
+  async function handleReturnToFurthest() {
+    if (sending || !session) return
+    const sessionLang = (session.language || 'de') as 'de' | 'en'
+    const moduleDef = getModuleDef(furthestModule)
+    const moduleName = moduleDef ? (sessionLang === 'de' ? moduleDef.nameDE : moduleDef.name) : furthestModule
+    const returnInput = sessionLang === 'de'
+      ? `Zurück zum aktuellen Fortschritt: "${moduleName}". Fasse den bisherigen Stand zusammen und lass uns weitermachen.`
+      : `Return to current progress: "${moduleName}". Summarize the current state and let's continue.`
+    sendToOrchestrator(returnInput, false, 'revisit', furthestModule)
   }
 
   // Prüfe ob das aktuelle Modul einen Nachfolger hat
@@ -281,10 +528,16 @@ export default function SessionPage() {
   }
 
   function isModuleComplete(moduleId: string): boolean {
+    // Nutze echte Daten: ein Modul ist complete wenn es im Context Store ist
+    return completedModules.includes(moduleId)
+  }
+
+  // Prüfe ob User gerade "hinter" dem Fortschritt ist (revisiting)
+  function isRevisiting(): boolean {
     if (!session) return false
-    const current = MODULES.findIndex(m => m.id === session.currentModule)
-    const check = MODULES.findIndex(m => m.id === moduleId)
-    return check < current
+    const currentIdx = MODULES.findIndex(m => m.id === session.currentModule)
+    const furthestIdx = MODULES.findIndex(m => m.id === furthestModule)
+    return currentIdx < furthestIdx
   }
 
   function isCurrentModule(moduleId: string): boolean {
@@ -346,13 +599,18 @@ export default function SessionPage() {
               }}>
                 {cluster.name}
               </div>
-              {cluster.modules.map(mod => {
+              {cluster.modules.filter(mod => mod.status !== 'coming_soon').map(mod => {
                 const complete = isModuleComplete(mod.id)
                 const current = isCurrentModule(mod.id)
-                const comingSoon = mod.status === 'coming_soon'
+                // Kann klicken wenn: (completed ODER im revisit-Bereich) UND nicht schon dort
+                const canClick = (complete || (isRevisiting() && MODULES.findIndex(m => m.id === mod.id) <= MODULES.findIndex(m => m.id === furthestModule))) && !sending && !current
                 return (
                   <div
                     key={mod.id}
+                    onClick={() => {
+                      if (canClick) handleRevisit(mod.id)
+                    }}
+                    title={canClick ? (lang === 'de' ? 'Klicke um dieses Modul erneut zu bearbeiten' : 'Click to revisit this module') : undefined}
                     style={{
                       padding: '8px 16px 8px 24px',
                       fontSize: 13,
@@ -360,17 +618,24 @@ export default function SessionPage() {
                       fontWeight: current ? 600 : 400,
                       background: current ? 'var(--bg-card)' : 'transparent',
                       borderLeft: current ? `3px solid ${cluster.color}` : '3px solid transparent',
-                      cursor: comingSoon ? 'default' : 'pointer',
-                      opacity: comingSoon ? 0.5 : 1,
+                      cursor: canClick ? 'pointer' : 'default',
                       display: 'flex',
                       alignItems: 'center',
                       gap: 8,
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      if (canClick) (e.currentTarget as HTMLElement).style.background = 'var(--bg-card)'
+                    }}
+                    onMouseLeave={e => {
+                      if (canClick && !current) (e.currentTarget as HTMLElement).style.background = 'transparent'
                     }}
                   >
                     <span style={{ fontSize: 10 }}>
                       {complete ? '✓' : current ? '●' : '○'}
                     </span>
                     <span>{lang === 'de' ? mod.nameDE : mod.name}</span>
+                    {canClick && <span style={{ fontSize: 9, marginLeft: 'auto', color: 'var(--text-muted)' }}>↩</span>}
                   </div>
                 )
               })}
@@ -456,36 +721,98 @@ export default function SessionPage() {
           flex: 1, overflow: 'auto',
           padding: '24px 24px 0',
         }}>
-          {/* Analyse-Start-Indikator wenn noch keine Messages und Auto-Start läuft */}
-          {messages.length === 0 && !sending && (
+          {/* Analyse-Start-Indikator wenn noch keine Messages */}
+          {messages.length === 0 && (
             <div style={{
               textAlign: 'center', padding: '80px 40px',
               color: 'var(--text-muted)',
             }}>
               <p style={{ fontSize: 14, lineHeight: 1.6 }}>
-                Analyse wird vorbereitet…
+                {sending ? 'Analyse läuft…' : 'Analyse wird vorbereitet…'}
               </p>
             </div>
           )}
 
-          {/* Message List — filtere Auto-Messages raus */}
+          {/* Mini-Summary Block: Completed Modules */}
+          {completedModules.length > 0 && (
+            <div style={{
+              background: '#1a1a1a',
+              padding: '8px 16px',
+              borderRadius: 8,
+              marginBottom: 24,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 12,
+              alignItems: 'center',
+            }}>
+              {completedModules.map(moduleId => {
+                const moduleDef = getModuleDef(moduleId)
+                const cluster = getClusterForModule(moduleId)
+                if (!moduleDef) return null
+                return (
+                  <button
+                    key={moduleId}
+                    onClick={() => handleRevisit(moduleId)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '4px 10px',
+                      borderRadius: 4,
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      color: 'var(--text-muted)',
+                      transition: 'color 0.2s',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.color = cluster?.color || 'var(--text-primary)'
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'
+                    }}
+                  >
+                    <span style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: cluster?.color || 'var(--text-muted)',
+                    }} />
+                    <span>{lang === 'de' ? moduleDef.nameDE : moduleDef.name}</span>
+                    <span>✓</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Message List — filtere Auto-Messages raus, transformiere Revisit-Messages */}
           {messages
             .filter(msg => {
+              // Only show messages for the current module
+              if (msg.moduleId && msg.moduleId !== session?.currentModule) return false
               // Auto-Start-Messages verstecken (User hat sie nicht getippt)
               if (msg.role === 'user' && msg.content.startsWith('Analysiere die Marke ')) return false
               // "Weiter"-Klick-Messages verstecken
               if (msg.role === 'user' && msg.content === 'Weiter zum nächsten Schritt.') return false
+              // Revisit- und Return-Messages verstecken (werden als System-Marker gezeigt)
+              if (msg.role === 'user' && msg.content.startsWith('Ich möchte das Modul "')) return false
+              if (msg.role === 'user' && msg.content.startsWith('Zurück zum aktuellen Fortschritt:')) return false
+              if (msg.role === 'user' && msg.content.startsWith('I want to revisit the "')) return false
+              if (msg.role === 'user' && msg.content.startsWith('Return to current progress:')) return false
               return true
             })
-            .map(msg => (
-            <div
-              key={msg.id}
-              style={{
-                marginBottom: 20,
-                display: 'flex',
-                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              }}
-            >
+            .map((msg, idx, arr) => {
+              return (
+              <div key={msg.id}>
+              <div
+                style={{
+                  marginBottom: 20,
+                  display: 'flex',
+                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                }}
+              >
               {msg.role === 'assistant' ? (
                 /* Assistant: Formatiertes Markdown */
                 <div
@@ -500,8 +827,8 @@ export default function SessionPage() {
                     lineHeight: 1.7,
                   }}
                   dangerouslySetInnerHTML={{
-                    __html: streaming && msg.id.startsWith('stream-')
-                      ? renderMessage(msg.content) + '<span style="opacity:0.4">▍</span>'
+                    __html: streaming && msg.id === streamMsgIdRef.current
+                      ? (streamingHtml || '<span style="opacity:0.4">▍</span>')
                       : renderMessage(msg.content)
                   }}
                 />
@@ -523,7 +850,8 @@ export default function SessionPage() {
                 </div>
               )}
             </div>
-          ))}
+            </div>
+          )})}
 
           {/* Typing Indicator */}
           {sending && messages.filter(m => m.id.startsWith('stream-') && m.content.length > 0).length === 0 && (
@@ -542,100 +870,162 @@ export default function SessionPage() {
             </div>
           )}
 
-          {/* Phase-Complete Card: Download + Weiter */}
+          {/* Action Bar: Immer sichtbar wenn nicht streaming — kontextabhängig */}
           {!sending && !streaming && messages.length > 0 && (
             <div style={{
               margin: '24px auto 8px',
-              maxWidth: 560,
-              padding: '20px 24px',
+              maxWidth: 600,
+              padding: '16px 20px',
               borderRadius: 16,
               background: 'var(--bg-card)',
               border: '1px solid var(--border)',
             }}>
-              {/* Phase-Abschluss Header */}
+              {/* Aktuelles Modul + Status */}
               <div style={{
-                fontSize: 13, fontWeight: 700, color: 'var(--accent-teal)',
-                textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: 12,
               }}>
-                {currentModuleDef
-                  ? `${lang === 'de' ? currentModuleDef.nameDE : currentModuleDef.name} — abgeschlossen`
-                  : 'Phase abgeschlossen'}
+                <div style={{
+                  fontSize: 12, fontWeight: 700, color: currentCluster?.color || 'var(--accent-teal)',
+                  textTransform: 'uppercase', letterSpacing: 1,
+                }}>
+                  {currentModuleDef
+                    ? (lang === 'de' ? currentModuleDef.nameDE : currentModuleDef.name)
+                    : session.currentModule}
+                </div>
+                {isRevisiting() && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, color: 'var(--accent-coral)',
+                    padding: '2px 8px', borderRadius: 4,
+                    background: 'rgba(232, 116, 97, 0.15)',
+                  }}>
+                    {lang === 'de' ? 'Überarbeitung' : 'Revisiting'}
+                  </span>
+                )}
               </div>
 
-              {/* Download-Optionen */}
-              <div style={{ marginBottom: hasNextModule() ? 16 : 0 }}>
-                <div style={{
-                  fontSize: 12, color: 'var(--text-muted)', marginBottom: 10,
-                }}>
-                  {lang === 'de' ? 'Ergebnisse exportieren:' : 'Export results:'}
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {[
-                    { format: 'pdf', label: 'PDF' },
-                    { format: 'pptx', label: 'PowerPoint' },
-                    { format: 'docx', label: 'Word' },
-                  ].map(({ format, label }) => (
-                    <a
-                      key={format}
-                      href={`/api/export?sessionId=${sessionId}&format=${format}`}
-                      download
+              {/* Download-Optionen — kompakt inline */}
+              <div style={{
+                display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12,
+              }}>
+                {[
+                  { format: 'pdf', label: 'PDF' },
+                  { format: 'pptx', label: 'PPTX' },
+                  { format: 'docx', label: 'DOCX' },
+                ].map(({ format, label }) => (
+                  <a
+                    key={format}
+                    href={`/api/export?sessionId=${sessionId}&format=${format}`}
+                    download
+                    style={{
+                      padding: '5px 12px', borderRadius: 6,
+                      background: 'var(--bg-primary)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-muted)',
+                      fontSize: 11, fontWeight: 500,
+                      textDecoration: 'none',
+                      cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      transition: 'border-color 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-teal)'
+                      ;(e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'
+                      ;(e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'
+                    }}
+                  >
+                    <span style={{ fontSize: 12 }}>↓</span> {label}
+                  </a>
+                ))}
+              </div>
+
+              {/* Debug entfernt — Selection funktioniert jetzt mit JSON-FIRST */}
+
+              {/* Selection Panel (wenn verfügbar) */}
+              {selectionConfig && selectionItems.length > 0 && (
+                <SelectionPanel
+                  config={selectionConfig}
+                  items={selectionItems}
+                  defaultSelected={selectionDefaults}
+                  language={lang}
+                  onConfirm={handleSelectionConfirm}
+                />
+              )}
+
+              {/* Navigation Buttons */}
+              <div style={{
+                paddingTop: 12,
+                borderTop: '1px solid var(--border)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+              }}>
+                {/* Links: Zurück zum Fortschritt (nur wenn revisiting) */}
+                <div>
+                  {isRevisiting() && (
+                    <button
+                      onClick={handleReturnToFurthest}
                       style={{
                         padding: '8px 16px', borderRadius: 8,
-                        background: 'var(--bg-primary)',
-                        border: '1px solid var(--border)',
-                        color: 'var(--text-secondary)',
-                        fontSize: 12, fontWeight: 500,
-                        textDecoration: 'none',
+                        background: 'transparent',
+                        color: 'var(--accent-coral)',
+                        fontSize: 12, fontWeight: 600,
+                        border: '1px solid var(--accent-coral)',
                         cursor: 'pointer',
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        transition: 'border-color 0.15s',
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        transition: 'background 0.15s',
                       }}
                       onMouseEnter={e => {
-                        (e.target as HTMLElement).style.borderColor = 'var(--accent-teal)'
-                        ;(e.target as HTMLElement).style.color = 'var(--text-primary)'
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(232, 116, 97, 0.1)'
                       }}
                       onMouseLeave={e => {
-                        (e.target as HTMLElement).style.borderColor = 'var(--border)'
-                        ;(e.target as HTMLElement).style.color = 'var(--text-secondary)'
+                        (e.currentTarget as HTMLElement).style.background = 'transparent'
                       }}
                     >
-                      <span style={{ fontSize: 14 }}>↓</span> {label}
-                    </a>
-                  ))}
+                      ↗ {lang === 'de' ? 'Zurück zum Fortschritt' : 'Return to progress'}
+                    </button>
+                  )}
                 </div>
-              </div>
 
-              {/* Weiter-Button */}
-              {hasNextModule() && (
-                <div style={{
-                  paddingTop: 16,
-                  borderTop: '1px solid var(--border)',
-                  display: 'flex', justifyContent: 'flex-end',
-                }}>
+                {/* Rechts: Weiter-Button (nächstes Modul in der Sequenz) */}
+                {hasNextModule() && (
                   <button
                     onClick={handleAdvance}
                     style={{
-                      padding: '10px 28px', borderRadius: 10,
+                      padding: '8px 22px', borderRadius: 8,
                       background: 'var(--accent-teal)',
-                      color: 'white', fontSize: 14, fontWeight: 600,
+                      color: 'white', fontSize: 13, fontWeight: 600,
                       border: 'none', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 8,
+                      display: 'flex', alignItems: 'center', gap: 6,
                       transition: 'transform 0.15s, box-shadow 0.15s',
                       boxShadow: '0 2px 8px rgba(74,158,142,0.3)',
                     }}
                     onMouseEnter={e => {
-                      (e.target as HTMLElement).style.transform = 'translateY(-1px)'
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'
                     }}
                     onMouseLeave={e => {
-                      (e.target as HTMLElement).style.transform = 'translateY(0)'
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
                     }}
                   >
                     {lang === 'de' ? 'Weiter' : 'Continue'} →
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
+
+          {/* Copyright Notice */}
+          <div style={{
+            padding: '16px 0',
+            marginTop: 24,
+            fontSize: 11,
+            fontStyle: 'italic',
+            color: 'rgba(255,255,255,0.25)',
+            lineHeight: 1.4,
+          }}>
+            Die 17solutions Methode, einschliesslich aller Analyse-Frameworks, Modul-Strukturen und strategischen Prozesse, ist geistiges Eigentum. Jegliche Reproduktion, Weitergabe oder kommerzielle Nutzung ohne ausdrueckliche Genehmigung ist untersagt.
+          </div>
 
           <div ref={messagesEndRef} />
         </div>

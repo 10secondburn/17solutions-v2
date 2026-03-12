@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/config'
 import { db } from '@/lib/db/client'
-import { sessions, messages } from '@/lib/db/schema'
+import { sessions, messages, usageEvents } from '@/lib/db/schema'
 import { eq, and, asc } from 'drizzle-orm'
 
 // GET — Einzelne Session laden
@@ -26,6 +26,39 @@ export async function GET(
   }
 
   return NextResponse.json(result)
+}
+
+// DELETE — Session und alle zugehörigen Daten löschen
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { id } = await params
+  const userId = (session.user as any).id
+
+  // Nur eigene Sessions löschen
+  const [existing] = await db.select().from(sessions)
+    .where(and(eq(sessions.id, id), eq(sessions.userId, userId)))
+    .limit(1)
+
+  if (!existing) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  // usage_events hat KEIN onDelete: 'cascade' — manuell löschen
+  await db.delete(usageEvents).where(eq(usageEvents.sessionId, id))
+
+  // Cascade im DB-Schema löscht automatisch:
+  // - messages (onDelete: 'cascade')
+  // - context_store (onDelete: 'cascade')
+  await db.delete(sessions).where(eq(sessions.id, id))
+
+  return NextResponse.json({ success: true })
 }
 
 // PATCH — Session aktualisieren (Status, currentModule etc.)

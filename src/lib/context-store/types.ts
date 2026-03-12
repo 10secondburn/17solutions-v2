@@ -16,6 +16,48 @@ export interface Citation {
 }
 
 // ============================================================
+// Fakten-Registry — Verifizierte Fakten, die modul-uebergreifend gelten
+// ============================================================
+
+export type FactCategory =
+  | 'market_data'      // Marktanteile, Umsatz, Wachstumsraten
+  | 'company_data'     // Mitarbeiter, Standorte, Produkte
+  | 'sdg_data'         // SDG-spezifische Daten
+  | 'timing'           // Zeitfenster, Events, Deadlines
+  | 'audience'         // Zielgruppen-Daten
+  | 'geographic'       // Markt/Region-Daten
+  | 'general'          // Sonstiges
+
+export interface FactEntry {
+  factId: string
+  key: string                    // z.B. "samsung_halbleiter_marktanteil"
+  value: string                  // z.B. "28% globaler Marktanteil (2025)"
+  category: FactCategory
+  sourceModule: string           // Modul, das diesen Fakt zuerst etabliert hat
+  confidence: ConfidenceLevel
+  locked: boolean                // true = darf nicht mehr abweichen
+  createdAt: string              // ISO timestamp
+  updatedAt?: string
+}
+
+export interface FactsRegistry {
+  facts: FactEntry[]
+  lastUpdated: string
+}
+
+// ============================================================
+// System-Variablen — Gelten fuer die gesamte Session
+// ============================================================
+
+export interface SystemVariables {
+  currentDate: string            // ISO date, z.B. "2026-03-12"
+  currentYear: number
+  targetMarket: string           // z.B. "DACH", "Global", "EU"
+  language: Language
+  mode: 'creative' | 'inspiration'
+}
+
+// ============================================================
 // Phase-spezifische Output-Typen
 // ============================================================
 
@@ -53,6 +95,7 @@ export interface SDGSelection {
   primarySDG: number
   secondarySDGs: number[]
   rationale: string
+  strategicNarrative?: string
   userOverrides: string[]
 }
 
@@ -80,14 +123,20 @@ export interface SessionContext {
   // CREATE (Phase 3)
   springboards?: unknown
   partnerships?: unknown
+  audienceDesign?: unknown
+  marketScope?: unknown
   ideaDevelopment?: unknown
 
   // BEWERTEN (Phase 4)
   businessImpact?: unknown
   roiEstimation?: unknown
+  caseBoard?: unknown
+  executiveSummary?: unknown
 
   // Meta
   citationRegistry: Citation[]
+  factsRegistry: FactsRegistry
+  systemVars: SystemVariables
   lastUpdated: string
 }
 
@@ -98,10 +147,22 @@ export function createInitialContext(params: {
   language: Language
   mode: 'creative' | 'inspiration'
 }): SessionContext {
+  const now = new Date()
   return {
     ...params,
     currentModule: 'verstehen_01',
     citationRegistry: [],
-    lastUpdated: new Date().toISOString(),
+    factsRegistry: {
+      facts: [],
+      lastUpdated: now.toISOString(),
+    },
+    systemVars: {
+      currentDate: now.toISOString().split('T')[0],
+      currentYear: now.getFullYear(),
+      targetMarket: 'DACH', // Default, wird in verstehen_01 ggf. ueberschrieben
+      language: params.language,
+      mode: params.mode,
+    },
+    lastUpdated: now.toISOString(),
   }
 }

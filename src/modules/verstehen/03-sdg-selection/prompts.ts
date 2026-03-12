@@ -1,5 +1,6 @@
 import type { Language } from '@/types'
 import type { SessionContext } from '@/lib/context-store/types'
+import { TONALITY_DE, TONALITY_EN, FAKTENBOX_DE, FAKTENBOX_EN, FACTS_CONSTRAINT_DE, FACTS_CONSTRAINT_EN } from '@/lib/prompts/tonality'
 
 export function getSDGSelectionSystemPrompt(language: Language, context: SessionContext): string {
   if (language === 'en') {
@@ -26,7 +27,7 @@ function getSDGSelectionDE(context: SessionContext): string {
   if (sdgMapping) {
     const topScores = sdgMapping.scores
       ?.filter((s: any) => sdgMapping.topSDGs?.includes(s.sdg))
-      ?.map((s: any) => `- **SDG ${s.sdg} (${s.name || ''}):** Verbindung ${s.connectionStrength}/10, Chance ${s.strategicOpportunity}/10, Risiko ${s.authenticityRisk}/10, Narrativ ${s.narrativePotential}/10 — ${s.rationale}`)
+      ?.map((s: any) => `- **SDG ${s.sdg} (${s.name || ''}):** Verbindung ${s.connectionStrength}/10, Chance ${s.strategicOpportunity}/10, Risiko ${s.authenticityRisk}/10, Narrativ ${s.narrativePotential}/10. ${s.rationale}`)
       ?.join('\n') || 'Keine Top-SDGs identifiziert'
 
     previousContext += `
@@ -37,7 +38,7 @@ ${topScores}
 `
   }
 
-  return `# 17solutions — Modul 03: SDG-Auswahl
+  return `# 17solutions - Modul 03: SDG-Auswahl
 
 ## Deine Rolle
 Du bist ein strategischer SDG-Berater, der auf Basis der bisherigen Analyse eine klare Empfehlung gibt, welches primaere SDG die Marke verfolgen sollte — und welche sekundaeren SDGs das Narrativ stuetzen.
@@ -60,18 +61,9 @@ Auf Basis der vorherigen Analysen:
 - Langfristigkeit (ist das Thema zukunftssicher?)
 
 ## Output-Format
-Antworte ZUERST mit einer klaren, strategischen Empfehlung (3-4 Absaetze):
-- Beginne mit deiner Top-Empfehlung und dem WARUM
-- Erklaere die sekundaeren SDGs und wie sie das Gesamtbild ergaenzen
-- Skizziere das strategische Narrativ in 2-3 Saetzen
-- Benenne moegliche Risiken und wie man ihnen begegnet
+KRITISCH: Beginne deine Antwort IMMER mit dem JSON-Block. Der JSON-Block muss das ERSTE sein, was du ausgibst.
 
-Dann schliesse mit einer klar abgesetzten Zusammenfassung:
-
-### Erkenntnisse
-Fasse die 3-5 wichtigsten strategischen Erkenntnisse in Bulletpoints zusammen. Fokus auf: welches SDG den groessten strategischen Hebel hat, was das Narrativ einzigartig macht, und welche naechsten Schritte sinnvoll waeren.
-
-Dann liefere den strukturierten Block:
+Liefere ZUERST den strukturierten Block:
 
 \`\`\`json
 {
@@ -83,14 +75,25 @@ Dann liefere den strukturierten Block:
 }
 \`\`\`
 
-## Sprache & Ton
-Antworte auf Deutsch. Duze den User. Professionell, strategisch, inspirierend.
-KEINE Emojis verwenden.
+Danach schreibe eine klare, strategische Empfehlung (3-4 Absaetze):
+- Beginne mit deiner Top-Empfehlung und dem WARUM
+- Erklaere die sekundaeren SDGs und wie sie das Gesamtbild ergaenzen
+- Skizziere das strategische Narrativ in 2-3 Saetzen
+- Benenne moegliche Risiken und wie man ihnen begegnet
+
+${FAKTENBOX_DE}
+
+${TONALITY_DE}
+
+${FACTS_CONSTRAINT_DE}
 
 ## Konfidenz-Regeln
-- VERIFIZIERT — Basiert auf bestaetigten Markenaktivitaeten
-- PLAUSIBEL — Strategisch logische Ableitung
-- HYPOTHESE — Kreative Empfehlung`
+Fuer jeden Datenpunkt und jede Einschaetzung in deiner Analyse:
+- VERIFIZIERT. Basiert auf bestaetigten Markenaktivitaeten
+- PLAUSIBEL. Strategisch logische Ableitung
+- HYPOTHESE. Kreative Empfehlung
+
+Kennzeichne diese Stufen im Text mit den Labels [VERIFIZIERT], [PLAUSIBEL] oder [HYPOTHESE].`
 }
 
 function getSDGSelectionEN(context: SessionContext): string {
@@ -111,7 +114,7 @@ function getSDGSelectionEN(context: SessionContext): string {
   if (sdgMapping) {
     const topScores = sdgMapping.scores
       ?.filter((s: any) => sdgMapping.topSDGs?.includes(s.sdg))
-      ?.map((s: any) => `- **SDG ${s.sdg} (${s.name || ''}):** Connection ${s.connectionStrength}/10, Opportunity ${s.strategicOpportunity}/10, Risk ${s.authenticityRisk}/10, Narrative ${s.narrativePotential}/10 — ${s.rationale}`)
+      ?.map((s: any) => `- **SDG ${s.sdg} (${s.name || ''}):** Connection ${s.connectionStrength}/10, Opportunity ${s.strategicOpportunity}/10, Risk ${s.authenticityRisk}/10, Narrative ${s.narrativePotential}/10. ${s.rationale}`)
       ?.join('\n') || 'No top SDGs identified'
 
     previousContext += `
@@ -122,7 +125,7 @@ ${topScores}
 `
   }
 
-  return `# 17solutions — Module 03: SDG Selection
+  return `# 17solutions - Module 03: SDG Selection
 
 ## Your Role
 You are a strategic SDG advisor who provides a clear recommendation on which primary SDG the brand should pursue — and which secondary SDGs support the narrative.
@@ -138,14 +141,9 @@ Based on previous analyses:
 4. **Develop a strategic narrative** — a thread showing how the SDGs tell a story together
 
 ## Output Format
-First respond with a clear strategic recommendation (3-4 paragraphs).
+CRITICAL: Begin your response ALWAYS with the JSON block. The JSON block must be the FIRST thing you output.
 
-Then close with a clearly separated summary:
-
-### Key Insights
-Summarize the 3-5 most important strategic insights as bullet points. Focus on: which SDG has the greatest strategic leverage, what makes the narrative unique, and what next steps are advisable.
-
-Then provide the structured block:
+Provide the structured block FIRST:
 
 \`\`\`json
 {
@@ -157,7 +155,19 @@ Then provide the structured block:
 }
 \`\`\`
 
-## Language & Tone
-Respond in English. Professional, strategic, inspiring.
-Do NOT use emojis.`
+Then respond with a clear strategic recommendation (3-4 paragraphs).
+
+${FAKTENBOX_EN}
+
+## Confidence Rules
+For each data point and assessment in your analysis:
+- VERIFIED. Based on confirmed brand activities
+- PLAUSIBLE. Strategically logical derivation
+- HYPOTHESIS. Creative recommendation
+
+Mark these levels in the text with labels [VERIFIED], [PLAUSIBLE] or [HYPOTHESIS].
+
+${TONALITY_EN}
+
+${FACTS_CONSTRAINT_EN}`
 }
