@@ -38,5 +38,7 @@ export interface ModuleResult {
 export interface OrchestratorRequest {
   sessionId: string
   userInput: string
-  action?: 'message' | 'advance' | 'export'
+  action?: 'message' | 'advance' | 'revisit' | 'export'
+  /** Ziel-Modul bei 'revisit' — z.B. 'verstehen_03' um zur SDG-Auswahl zurückzukehren */
+  targetModule?: string
 }

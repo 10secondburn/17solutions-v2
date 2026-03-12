@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { sessionId, userInput, action } = body
+    const { sessionId, userInput, action, targetModule } = body
 
     if (!sessionId || !userInput) {
       return new Response(JSON.stringify({ error: 'Missing sessionId or userInput' }), {
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     // Streaming-Response erzeugen
     const orchestratorStream = executeOrchestratorStream(
-      { sessionId, userInput, action },
+      { sessionId, userInput, action, targetModule },
       userId,
     )
 

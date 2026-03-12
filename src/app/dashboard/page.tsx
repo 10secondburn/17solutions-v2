@@ -49,6 +49,8 @@ export default function DashboardPage() {
   const [brandName, setBrandName] = useState('')
   const [creating, setCreating] = useState(false)
   const [loadingSessions, setLoadingSessions] = useState(true)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -77,6 +79,21 @@ export default function DashboardPage() {
     }
   }
 
+  async function deleteSession(sessionId: string) {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setSessions(prev => prev.filter(s => s.id !== sessionId))
+      }
+    } catch (e) {
+      console.error('Delete failed:', e)
+    } finally {
+      setDeleting(false)
+      setConfirmDelete(null)
+    }
+  }
+
   function getClusterForModule(moduleId: string) {
     return CLUSTERS.find(c => c.modules.some(m => m.id === moduleId))
   }
@@ -87,148 +104,111 @@ export default function DashboardPage() {
     <AppShell>
       <div style={{ maxWidth: 860, margin: '0 auto', padding: '48px 24px' }}>
 
-        {/* === Hero === */}
+        {/* === Hero — IMMER sichtbar === */}
         <div className="landing" style={{
           textAlign: 'center',
-          marginBottom: hasSessions ? 40 : 0,
-          padding: hasSessions ? 0 : '20px 0 40px',
+          padding: '20px 0 40px',
           height: 'auto',
         }}>
-          {!hasSessions && (
-            <div style={{ marginBottom: 24 }}><LogoIcon size={88} /></div>
-          )}
-          <h1 className="landing-title" style={{
-            fontSize: hasSessions ? 28 : undefined,
-            marginBottom: hasSessions ? 12 : undefined,
-          }}>
+          <div style={{ marginBottom: 24 }}><LogoIcon size={88} /></div>
+          <h1 className="landing-title">
             <strong>17</strong>solutions
           </h1>
-          <p className="landing-subtitle" style={{
-            marginBottom: hasSessions ? 0 : undefined,
-          }}>
-            {hasSessions
-              ? 'Starte eine neue Analyse oder setze ein bestehendes Projekt fort.'
-              : 'Every brand has an untold SDG story. We find it, shape it into strategy, and craft pitch-ready innovation concepts — in 12 steps.'
-            }
+          <p className="landing-subtitle">
+            Every brand has an untold SDG story. We find it, shape it into
+            strategy, and craft pitch-ready innovation concepts.
           </p>
         </div>
 
-        {/* === Brand Input + Cards === */}
-        {!hasSessions ? (
-          <>
-            <p className="landing-question">Which brand do you want to transform?</p>
-            <div className="landing-brands">
-              {EXAMPLE_BRANDS.map(b => (
-                <div key={b.name} className="brand-card" onClick={() => startSession(b.name)}>
-                  <div className="brand-card-name">{b.name}</div>
-                  <div className="brand-card-industry">{b.desc}</div>
-                </div>
-              ))}
+        {/* === Brand Cards — IMMER sichtbar === */}
+        <p className="landing-question">Which brand do you want to transform?</p>
+        <div className="landing-brands">
+          {EXAMPLE_BRANDS.map(b => (
+            <div key={b.name} className="brand-card" onClick={() => startSession(b.name)}>
+              <div className="brand-card-name">{b.name}</div>
+              <div className="brand-card-industry">{b.desc}</div>
             </div>
-            <p className="landing-hint">Click a brand above to get started, or type your own below</p>
+          ))}
+        </div>
+        <p className="landing-hint">Click a brand above to get started, or type your own below</p>
 
-            {/* Custom Input */}
-            <div style={{
-              maxWidth: 560, margin: '28px auto 0',
-              display: 'flex', gap: 12,
-            }}>
-              <input
-                type="text"
-                value={brandName}
-                onChange={e => setBrandName(e.target.value)}
-                placeholder="Oder eigenen Markennamen eingeben…"
-                onKeyDown={e => e.key === 'Enter' && startSession(brandName)}
-                disabled={creating}
-                style={{
-                  flex: 1, padding: '14px 18px', borderRadius: 12,
-                  background: 'var(--bg-input)', border: '1px solid var(--border)',
-                  color: 'var(--text-primary)', fontSize: 14, outline: 'none',
-                  fontFamily: 'inherit',
-                }}
-              />
-              <button
-                onClick={() => startSession(brandName)}
-                disabled={creating || !brandName.trim()}
-                style={{
-                  padding: '14px 24px', borderRadius: 12,
-                  background: creating || !brandName.trim() ? 'var(--text-muted)' : 'var(--accent-coral)',
-                  color: 'white', fontSize: 14, fontWeight: 600,
-                  border: 'none', cursor: creating ? 'wait' : 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {creating ? 'Starte…' : 'Analyse starten'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Kompakteres Input für wiederkehrende User */}
-            <div style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 14,
-              padding: '24px 28px',
-              marginBottom: 36,
-            }}>
-              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, color: 'var(--text-primary)' }}>
-                Neue Analyse starten
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <input
-                  type="text"
-                  value={brandName}
-                  onChange={e => setBrandName(e.target.value)}
-                  placeholder="Markenname eingeben…"
-                  onKeyDown={e => e.key === 'Enter' && startSession(brandName)}
-                  disabled={creating}
-                  style={{
-                    flex: 1, padding: '12px 16px', borderRadius: 10,
-                    background: 'var(--bg-input)', border: '1px solid var(--border)',
-                    color: 'var(--text-primary)', fontSize: 14, outline: 'none',
-                    fontFamily: 'inherit',
-                  }}
-                />
-                <button
-                  onClick={() => startSession(brandName)}
-                  disabled={creating || !brandName.trim()}
-                  style={{
-                    padding: '12px 24px', borderRadius: 10,
-                    background: creating || !brandName.trim() ? 'var(--text-muted)' : 'var(--accent-coral)',
-                    color: 'white', fontSize: 14, fontWeight: 600,
-                    border: 'none', cursor: creating ? 'wait' : 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {creating ? 'Starte…' : 'Starten'}
-                </button>
-              </div>
-            </div>
+        {/* === Custom Input — IMMER sichtbar === */}
+        <div style={{
+          maxWidth: 560, margin: '28px auto 0',
+          display: 'flex', gap: 12,
+        }}>
+          <input
+            type="text"
+            value={brandName}
+            onChange={e => setBrandName(e.target.value)}
+            placeholder="Oder eigenen Markennamen eingeben…"
+            onKeyDown={e => e.key === 'Enter' && startSession(brandName)}
+            disabled={creating}
+            style={{
+              flex: 1, padding: '14px 18px', borderRadius: 12,
+              background: 'var(--bg-input)', border: '1px solid var(--border)',
+              color: 'var(--text-primary)', fontSize: 14, outline: 'none',
+              fontFamily: 'inherit',
+            }}
+          />
+          <button
+            onClick={() => startSession(brandName)}
+            disabled={creating || !brandName.trim()}
+            style={{
+              padding: '14px 24px', borderRadius: 12,
+              background: creating || !brandName.trim() ? 'var(--text-muted)' : 'var(--accent-coral)',
+              color: 'white', fontSize: 14, fontWeight: 600,
+              border: 'none', cursor: creating ? 'wait' : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {creating ? 'Starte…' : 'Analyse starten'}
+          </button>
+        </div>
 
-            {/* Projekte */}
+        {/* === Projekte — nur wenn vorhanden === */}
+        {loadingSessions && (
+          <div style={{ textAlign: 'center', padding: '40px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            Projekte laden…
+          </div>
+        )}
+
+        {hasSessions && (
+          <div style={{ marginTop: 64 }}>
             <div style={{
               fontSize: 12, fontWeight: 600, color: 'var(--text-muted)',
-              textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12,
+              textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14,
             }}>
-              Deine Projekte
+              Deine Analysen
             </div>
             <div style={{ display: 'grid', gap: 10 }}>
               {sessions.map(s => {
                 const cluster = getClusterForModule(s.currentModule)
+                const isConfirming = confirmDelete === s.id
                 return (
                   <div
                     key={s.id}
-                    onClick={() => router.push(`/session/${s.id}`)}
                     style={{
                       padding: '16px 20px', borderRadius: 12,
-                      background: 'var(--bg-card)', border: '1px solid var(--border)',
-                      cursor: 'pointer', display: 'flex', alignItems: 'center',
+                      background: 'var(--bg-card)',
+                      border: isConfirming ? '1px solid var(--accent-coral)' : '1px solid var(--border)',
+                      display: 'flex', alignItems: 'center',
                       justifyContent: 'space-between', transition: 'border-color 0.2s',
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-teal)')}
-                    onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
                   >
-                    <div>
+                    {/* Projekt-Info */}
+                    <div
+                      onClick={() => !isConfirming && router.push(`/session/${s.id}`)}
+                      style={{
+                        flex: 1, cursor: isConfirming ? 'default' : 'pointer',
+                      }}
+                      onMouseEnter={e => {
+                        if (!isConfirming) e.currentTarget.parentElement!.style.borderColor = 'var(--accent-teal)'
+                      }}
+                      onMouseLeave={e => {
+                        if (!isConfirming) e.currentTarget.parentElement!.style.borderColor = 'var(--border)'
+                      }}
+                    >
                       <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{s.brandName}</h3>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         {cluster && (
@@ -245,17 +225,78 @@ export default function DashboardPage() {
                         </span>
                       </div>
                     </div>
-                    <span style={{ fontSize: 18, color: 'var(--text-muted)' }}>→</span>
+
+                    {/* Aktionen */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      {isConfirming ? (
+                        <>
+                          <span style={{ fontSize: 12, color: 'var(--accent-coral)', marginRight: 4 }}>
+                            Wirklich löschen?
+                          </span>
+                          <button
+                            onClick={() => deleteSession(s.id)}
+                            disabled={deleting}
+                            style={{
+                              padding: '6px 14px', borderRadius: 6,
+                              background: 'var(--accent-coral)', color: 'white',
+                              fontSize: 12, fontWeight: 600, border: 'none',
+                              cursor: deleting ? 'wait' : 'pointer',
+                            }}
+                          >
+                            {deleting ? '...' : 'Ja'}
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete(null)}
+                            style={{
+                              padding: '6px 14px', borderRadius: 6,
+                              background: 'transparent', color: 'var(--text-muted)',
+                              fontSize: 12, fontWeight: 500,
+                              border: '1px solid var(--border)', cursor: 'pointer',
+                            }}
+                          >
+                            Nein
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setConfirmDelete(s.id)
+                            }}
+                            title="Projekt löschen"
+                            style={{
+                              width: 28, height: 28, borderRadius: 6,
+                              background: 'transparent', border: '1px solid transparent',
+                              color: 'var(--text-muted)', fontSize: 14,
+                              cursor: 'pointer', display: 'flex',
+                              alignItems: 'center', justifyContent: 'center',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => {
+                              (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-coral)'
+                              ;(e.currentTarget as HTMLElement).style.color = 'var(--accent-coral)'
+                            }}
+                            onMouseLeave={e => {
+                              (e.currentTarget as HTMLElement).style.borderColor = 'transparent'
+                              ;(e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'
+                            }}
+                          >
+                            ✕
+                          </button>
+                          <span
+                            onClick={() => router.push(`/session/${s.id}`)}
+                            style={{ fontSize: 18, color: 'var(--text-muted)', cursor: 'pointer', padding: '0 4px' }}
+                          >
+                            →
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 )
               })}
             </div>
-          </>
-        )}
-
-        {loadingSessions && (
-          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-            Projekte laden…
           </div>
         )}
       </div>

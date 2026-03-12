@@ -1,31 +1,29 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { ModuleExecutor, ModuleResult } from '@/lib/orchestrator/types'
 import type { SessionContext } from '@/lib/context-store/types'
+import { getConversationMessages } from '@/lib/orchestrator/conversation'
 import { getSDGMappingSystemPrompt } from './prompts'
 import { parseSDGMappingOutput } from './types'
-
-const MODEL = 'claude-sonnet-4-20250514'
+import { getModelForModule } from '@/lib/models/config'
 
 export const sdgMappingModule: ModuleExecutor = {
   config: {
     id: 'verstehen_02',
     name: 'SDG Mapping',
     cluster: 'verstehen',
-    stepNum: 3,
-    nextModuleId: 'verstehen_03',
+    stepNum: 2,
+    nextModuleId: 'validieren_04',
   },
 
   async execute(context: SessionContext, userInput: string): Promise<ModuleResult> {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const systemPrompt = getSDGMappingSystemPrompt(context.language, context)
 
-    const messages: Anthropic.MessageParam[] = [
-      { role: 'user', content: userInput },
-    ]
+    const messages = getConversationMessages(context, userInput)
 
     const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 6000,
+      model: getModelForModule('verstehen_02'),
+      max_tokens: 8000,
       temperature: 0.7,
       system: systemPrompt,
       messages,
@@ -62,7 +60,7 @@ export const sdgMappingModule: ModuleExecutor = {
       tokenUsage: {
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
-        model: MODEL,
+        model: getModelForModule('verstehen_02'),
       },
     }
   },
@@ -71,13 +69,11 @@ export const sdgMappingModule: ModuleExecutor = {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const systemPrompt = getSDGMappingSystemPrompt(context.language, context)
 
-    const messages: Anthropic.MessageParam[] = [
-      { role: 'user', content: userInput },
-    ]
+    const messages = getConversationMessages(context, userInput)
 
     const stream = anthropic.messages.stream({
-      model: MODEL,
-      max_tokens: 6000,
+      model: getModelForModule('verstehen_02'),
+      max_tokens: 8000,
       temperature: 0.7,
       system: systemPrompt,
       messages,

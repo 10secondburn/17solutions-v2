@@ -25,19 +25,21 @@ export const MODULES: ModuleDefinition[] = [
   { id: 'verstehen_01', name: 'Brand Entry', nameDE: 'Marken-Einstieg', cluster: 'verstehen', stepNum: 1, status: 'available' },
   { id: 'verstehen_01b', name: 'Document Intake', nameDE: 'Dokumenten-Aufnahme', cluster: 'verstehen', stepNum: 2, status: 'coming_soon' },
   { id: 'verstehen_02', name: 'SDG Mapping', nameDE: 'SDG-Zuordnung', cluster: 'verstehen', stepNum: 3, status: 'available' },
-  { id: 'verstehen_03', name: 'SDG Selection', nameDE: 'SDG-Auswahl', cluster: 'verstehen', stepNum: 4, status: 'available' },
+  { id: 'validieren_04', name: 'Reality Check', nameDE: 'Realitäts-Check', cluster: 'validieren', stepNum: 4, status: 'available' },
+  { id: 'verstehen_03', name: 'SDG Selection', nameDE: 'SDG-Auswahl', cluster: 'verstehen', stepNum: 5, status: 'available' },
   // VALIDIEREN
-  { id: 'validieren_04', name: 'Reality Check', nameDE: 'Realitäts-Check', cluster: 'validieren', stepNum: 5, status: 'coming_soon' },
-  { id: 'validieren_05', name: 'Target Research', nameDE: 'Zielgruppen-Research', cluster: 'validieren', stepNum: 6, status: 'coming_soon' },
-  { id: 'validieren_06', name: 'Data Research', nameDE: 'Daten-Research', cluster: 'validieren', stepNum: 7, status: 'coming_soon' },
+  { id: 'validieren_05', name: 'Protagonist Search', nameDE: 'Protagonisten-Search', cluster: 'validieren', stepNum: 6, status: 'available' },
   // CREATE
-  { id: 'create_07', name: 'Springboards', nameDE: 'Sprungbretter', cluster: 'create', stepNum: 8, status: 'coming_soon' },
-  { id: 'create_08', name: 'Partnerships', nameDE: 'Partnerschaften', cluster: 'create', stepNum: 9, status: 'coming_soon' },
-  { id: 'create_09', name: 'Idea Development', nameDE: 'Ideen-Entwicklung', cluster: 'create', stepNum: 10, status: 'coming_soon' },
+  { id: 'create_07', name: 'Springboards', nameDE: 'Sprungbretter', cluster: 'create', stepNum: 7, status: 'available' },
+  { id: 'create_09', name: 'Idea Development', nameDE: 'Ideen-Entwicklung', cluster: 'create', stepNum: 8, status: 'available' },
+  { id: 'create_08', name: 'Partnerships', nameDE: 'Partnerschaften', cluster: 'create', stepNum: 9, status: 'available' },
+  { id: 'create_08b', name: 'Audience Design', nameDE: 'Zielpublikum', cluster: 'create', stepNum: 10, status: 'available' },
+  { id: 'create_08c', name: 'Market Scope', nameDE: 'Markt-Definition', cluster: 'create', stepNum: 11, status: 'available' },
+  { id: 'validieren_06', name: 'Events/Timing', nameDE: 'Ereignisse', cluster: 'validieren', stepNum: 12, status: 'available' },
   // BEWERTEN
-  { id: 'bewerten_10', name: 'Business Impact', nameDE: 'Business Impact', cluster: 'bewerten', stepNum: 11, status: 'coming_soon' },
-  { id: 'bewerten_11', name: 'ROI Estimation', nameDE: 'ROI-Schätzung', cluster: 'bewerten', stepNum: 12, status: 'coming_soon' },
-  { id: 'bewerten_12', name: 'Case Board', nameDE: 'Case Board', cluster: 'bewerten', stepNum: 13, status: 'coming_soon' },
+  { id: 'bewerten_11', name: 'ROI Estimation', nameDE: 'ROI-Schätzung', cluster: 'bewerten', stepNum: 13, status: 'available' },
+  { id: 'bewerten_12', name: 'Case Board', nameDE: 'Case Board', cluster: 'bewerten', stepNum: 14, status: 'available' },
+  { id: 'bewerten_13', name: 'Executive Summary', nameDE: 'Executive Summary', cluster: 'bewerten', stepNum: 15, status: 'available' },
 ]
 
 export const CLUSTERS = [
